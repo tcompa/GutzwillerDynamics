@@ -7,7 +7,11 @@ import math
 import random
 
 import numpy
+import scipy
 import cython
+
+import scipy.linalg
+
 
 cdef extern from "math.h" nogil:
     double c_sqrt 'sqrt' (double)
@@ -28,7 +32,8 @@ cdef class Gutzwiller:
     '''
 
     # Lattice parameters
-    cdef int D, L, z, N_sites
+    cdef public int N_sites
+    cdef int D, L, z
     cdef int [:, :] nbr
     cdef int [:] N_nbr
     cdef int [:, :] site_coords
@@ -41,15 +46,24 @@ cdef class Gutzwiller:
     # State properties
     cdef int nmax
     cdef double complex [:, :] f
-    cdef double complex [:] bmean
-    cdef double [:] density
-    cdef double E
+    cdef double complex [:, :] f_new
+    cdef public double complex [:] bmean
+    cdef double complex [:] sum_bmeans
+    cdef public double [:] density
+    cdef public double E
+    cdef public double N
+
+    # Time evolution
+    cdef int size_M
+    cdef double complex [:, :] M
+    cdef double complex [:, :] exp_M
 
     def __init__(self,
                  int nmax=3,                                    # cutoff on occupation (index goes from 0 to nmax)
-                 int D=1, int L=11,                             # lattice parameters (site index goes from 0 to L-1 in each dimensions)
-                 double J=0.0, double U=0.0, double mu=0.0,     # homogeneous-model parameters
+                 int D=1, int L=5,                             # lattice parameters (site index goes from 0 to L-1 in each dimensions)
+                 double J=1.0, double U=1.0, double mu=1.0,     # homogeneous-model parameters
                  double VT=0.0, int alphaT=0,                   # trap parameters
+                 int seed=-1,
                  ):
 
         self.nmax = nmax
@@ -62,6 +76,10 @@ cdef class Gutzwiller:
         self.alphaT = alphaT
 
         cdef int i_site, i_dim, n
+
+        # Random seed
+        if seed > -1:
+            random.seed(seed)
 
         # Define lattice and neighbor table
         self.N_sites = self.L ** self.D
@@ -78,6 +96,12 @@ cdef class Gutzwiller:
         else:
             sys.exit('ERROR: By now only D=1 is accepted.')
 
+        # Define things for time evolution
+        self.size_M = self.nmax + 1
+        print('size_M: %i' % self.size_M)
+        self.M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
+        self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
+
         # Define trapping potential
         if L % 2 == 0:
             sys.exit('ERROR: If L is even, where should I put the trap center?')
@@ -93,7 +117,9 @@ cdef class Gutzwiller:
 
         # Declare useful variables
         self.f = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
+        self.f_new = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
         self.bmean = numpy.zeros(self.N_sites) + 0.0j
+        self.sum_bmeans = numpy.zeros(self.N_sites) + 0.0j
         self.density = numpy.zeros(self.N_sites)
 
         # Initialize Gutzwiller coefficients
@@ -103,12 +129,19 @@ cdef class Gutzwiller:
         self.normalize_gutzwiller_coefficients()
 
         self.update_bmean()
+        self.update_sum_bmeans()
         self.update_density()
         self.E = self.compute_energy()
 
+
+    cpdef void print_basic_info(self):
+        cdef int i_site
+
         for i_site in range(self.N_sites):
-            print('i_site=%02i' % i_site)
-            print(' <b>=(%+.4f, %+.4f), |<b>|=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]), c_abs(self.bmean[i_site]), self.density[i_site]))
+            print('i_site=%02i' % i_site, end='')
+            print(' <b>=(%+.4f, %+.4f), |<b>|=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]),
+                                                                 c_abs(self.bmean[i_site]), self.density[i_site]))
+        print('-' * 80)
 
     cdef void normalize_gutzwiller_coefficients(self):
         cdef int i_site, n
@@ -123,20 +156,30 @@ cdef class Gutzwiller:
 
     cdef void update_bmean(self):
         cdef int i_site, n
+        self.bmean[:] = 0.0 + 0.0j
         for i_site in range(self.N_sites):
-            self.bmean[i_site] = 0.0 + 0.0j
             for n in range(0, self.nmax):
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
 
+    cdef void update_sum_bmeans(self):
+        cdef int i_site, j_nbr, j_site
+        self.sum_bmeans[:] = 0.0 + 0.0j
+        for i_site in range(self.N_sites):
+            for j_nbr in range(self.N_nbr[i_site]):
+                j_site = self.nbr[i_site, j_nbr]
+                self.sum_bmeans[i_site] += self.bmean[j_site]
+
     cdef void update_density(self):
         cdef int i_site, n
+        self.N = 0.0
         for i_site in range(self.N_sites):
             self.density[i_site] = 0.0
             for n in range(0, self.nmax + 1):
                 self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
+            self.N += self.density[i_site]
 
     cdef double compute_energy(self):
-        cdef int i_site, j_site, j_nbr, n
+        cdef int i_site, j_site, j_nbr, n, m
         cdef double E = 0.0
         for i_site in range(self.N_sites):
 
@@ -153,4 +196,32 @@ cdef class Gutzwiller:
             E -= self.mu_local[i_site] * self.density[i_site]
         return E
 
-    def imaginary_time_step(self):
+    cpdef void one_real_time_step(self, double complex dtau):
+        cdef int i_site, n, k
+        cdef double complex prefactor = -1.0j * dtau
+        self.f_new[:, :] = 0.0
+
+        for i_site in range(self.N_sites):
+
+            # Build matrix
+            self.M[:, :] = 0.0 + 0.0j
+            for n in range(self.nmax + 1):
+                self.M[n, n] += prefactor * (0.5 * self.U * n * (n - 1.0) - self.mu_local[i_site] * n)
+            for n in range(1, self.nmax + 1):
+                self.M[n, n - 1] -= prefactor * self.sum_bmeans[i_site] * c_sqrt(n)
+            for n in range(0, self.nmax ):
+                self.M[n, n + 1] -= prefactor * c_conj(self.sum_bmeans[i_site]) * c_sqrt(n + 1)
+
+            # Update on-site coefficients
+            self.exp_M = scipy.linalg.expm(numpy.array(self.M[:, :]))
+            for n in range(self.nmax + 1):
+                for m in range(self.nmax + 1):
+                    self.f_new[i_site, n] += self.exp_M[n, m] * self.f[i_site, m]
+
+        # Update all coefficients
+        self.f[:, :] = self.f_new[:, :]
+
+        self.update_bmean()
+        self.update_sum_bmeans()
+        self.update_density()
+        self.E = self.compute_energy()
