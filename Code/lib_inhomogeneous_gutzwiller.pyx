@@ -108,8 +108,7 @@ cdef class Gutzwiller:
 
         for i_site in range(self.N_sites):
             print('i_site=%02i' % i_site)
-            print(' <b>=(%+.4f, %+.4f), |<b>|=%.4f, <n>=%.4f' % (i_site,
-                        c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]), c_abs(self.bmean[i_site]), self.density[i_site]))
+            print(' <b>=(%+.4f, %+.4f), |<b>|=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]), c_abs(self.bmean[i_site]), self.density[i_site]))
 
     cdef void normalize_gutzwiller_coefficients(self):
         cdef int i_site, n
@@ -137,13 +136,14 @@ cdef class Gutzwiller:
                 self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
 
     cdef double compute_energy(self):
-        cdef int i_site, j_site, n
+        cdef int i_site, j_site, j_nbr, n
         cdef double E = 0.0
         for i_site in range(self.N_sites):
 
             # 1/3 - Hopping
-            for j_site in range(i_site):
-                E -= 2.0 * self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
+            for j_nbr in range(self.N_nbr[i_site]):
+                j_site = self.nbr[i_site, j_nbr]
+                E -= self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
 
             # 2/3 - On-site repulsion
             for n in range(self.nmax + 1):
@@ -152,3 +152,5 @@ cdef class Gutzwiller:
             # 3/3 - On-site chemical potential (trap included)
             E -= self.mu_local[i_site] * self.density[i_site]
         return E
+
+    def imaginary_time_step(self):
