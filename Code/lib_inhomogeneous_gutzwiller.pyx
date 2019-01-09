@@ -198,7 +198,7 @@ cdef class Gutzwiller:
 
     cpdef void one_real_time_step(self, double complex dtau):
         cdef int i_site, n, k
-        cdef double complex prefactor = -1.0j * dtau
+        cdef double complex prefactor = 1.0j * dtau  #FIXME which sign???
         self.f_new[:, :] = 0.0
 
         for i_site in range(self.N_sites):
@@ -208,9 +208,9 @@ cdef class Gutzwiller:
             for n in range(self.nmax + 1):
                 self.M[n, n] += prefactor * (0.5 * self.U * n * (n - 1.0) - self.mu_local[i_site] * n)
             for n in range(1, self.nmax + 1):
-                self.M[n, n - 1] -= prefactor * self.sum_bmeans[i_site] * c_sqrt(n)
+                self.M[n, n - 1] -= prefactor * self.sum_bmeans[i_site] * c_sqrt(n) * self.J  ##FIXME 
             for n in range(0, self.nmax ):
-                self.M[n, n + 1] -= prefactor * c_conj(self.sum_bmeans[i_site]) * c_sqrt(n + 1)
+                self.M[n, n + 1] -= prefactor * c_conj(self.sum_bmeans[i_site]) * c_sqrt(n + 1) * self.J
 
             # Update on-site coefficients
             self.exp_M = scipy.linalg.expm(numpy.array(self.M[:, :]))
@@ -220,6 +220,8 @@ cdef class Gutzwiller:
 
         # Update all coefficients
         self.f[:, :] = self.f_new[:, :]
+
+        self.normalize_gutzwiller_coefficients()
 
         self.update_bmean()
         self.update_sum_bmeans()
