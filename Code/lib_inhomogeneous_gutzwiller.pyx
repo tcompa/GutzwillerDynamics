@@ -11,6 +11,7 @@ import scipy
 import cython
 
 import scipy.linalg
+import scipy.sparse.linalg
 
 
 cdef extern from "math.h" nogil:
@@ -24,12 +25,10 @@ cdef extern from "complex.h" nogil:
     double c_imag 'cimag' (double complex)
 
 
-@cython.wraparound(False)  #FIXME
+@cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.initializedcheck(False)
 cdef class Gutzwiller:
-    '''
-    '''
 
     # Lattice parameters
     cdef public int N_sites
@@ -60,8 +59,8 @@ cdef class Gutzwiller:
 
     def __init__(self,
                  int nmax=3,                                    # cutoff on occupation (index goes from 0 to nmax)
-                 int D=1, int L=5,                             # lattice parameters (site index goes from 0 to L-1 in each dimensions)
-                 double J=1.0, double U=1.0, double mu=1.0,     # homogeneous-model parameters
+                 int D=1, int L=7, int OBC=0,                   # lattice parameters (site index goes from 0 to L-1 in each dimensions)
+                 double J=0.1, double U=1.0, double mu=0.5,     # homogeneous-model parameters
                  double VT=0.0, int alphaT=0,                   # trap parameters
                  int seed=-1,
                  ):
@@ -93,8 +92,15 @@ cdef class Gutzwiller:
                 self.N_nbr[i_site] = 2
                 self.nbr[i_site, 0] = (i_site - 1 + self.L) % self.L
                 self.nbr[i_site, 1] = (i_site + 1) % self.L
+            if OBC == 1:
+                if L < 2 or D > 1:
+                    sys.exit('ERROR: Trying to implement OBC with D=%i and L=%i. Exit.' % (self.D, self.L))
+                self.N_nbr[0] = 1
+                self.nbr[0, 0] = 1
+                self.N_nbr[self.L - 1] = 1
+                self.nbr[self.L - 1, 0] = self.L - 2
         else:
-            sys.exit('ERROR: By now only D=1 is accepted.')
+            sys.exit('ERROR: By now only D=1 is implemented. Exit.')
 
         # Define things for time evolution
         self.size_M = self.nmax + 1
@@ -133,8 +139,23 @@ cdef class Gutzwiller:
         self.update_density()
         self.E = self.compute_energy()
 
+    def print_nbr_table(self):
+        print('----- Neighbor table -----')
+        for i_site in range(self.N_sites):
+            print('i_site=%3i, nbr:' % i_site, end='')
+            for k in range(self.N_nbr[i_site]):
+                print(' %i' % self.nbr[i_site, k], end='')
+            print('\n', end='')
+        print('--------------------------')
 
-    cpdef void print_basic_info(self):
+    def print_f_coefficients(self, int i_site):
+        print('------- f(site=%i) -------' % i_site)
+        for n in range(self.nmax + 1):
+            print(' (%+.4f, %+.4f)' % (c_real(self.f[i_site, n]), c_imag(self.f[i_site, n])), end='')
+        print('\n', end='')
+        print('--------------------------')
+
+    def print_basic_info(self):
         cdef int i_site
 
         for i_site in range(self.N_sites):
@@ -143,6 +164,7 @@ cdef class Gutzwiller:
                                                                  c_abs(self.bmean[i_site]), self.density[i_site]))
         print('-' * 80)
 
+    #@cython.cdivision(True)
     cdef void normalize_gutzwiller_coefficients(self):
         cdef int i_site, n
         cdef double norm_sq, inv_norm
@@ -156,14 +178,14 @@ cdef class Gutzwiller:
 
     cdef void update_bmean(self):
         cdef int i_site, n
-        self.bmean[:] = 0.0 + 0.0j
+        self.bmean[:] = 0.0
         for i_site in range(self.N_sites):
             for n in range(0, self.nmax):
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
 
     cdef void update_sum_bmeans(self):
         cdef int i_site, j_nbr, j_site
-        self.sum_bmeans[:] = 0.0 + 0.0j
+        self.sum_bmeans[:] = 0.0
         for i_site in range(self.N_sites):
             for j_nbr in range(self.N_nbr[i_site]):
                 j_site = self.nbr[i_site, j_nbr]
@@ -172,8 +194,8 @@ cdef class Gutzwiller:
     cdef void update_density(self):
         cdef int i_site, n
         self.N = 0.0
+        self.density[:] = 0.0
         for i_site in range(self.N_sites):
-            self.density[i_site] = 0.0
             for n in range(0, self.nmax + 1):
                 self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
             self.N += self.density[i_site]
@@ -183,7 +205,7 @@ cdef class Gutzwiller:
         cdef double E = 0.0
         for i_site in range(self.N_sites):
 
-            # 1/3 - Hopping
+            # 1/2 - Hopping
             for j_nbr in range(self.N_nbr[i_site]):
                 j_site = self.nbr[i_site, j_nbr]
                 E -= self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
@@ -191,29 +213,30 @@ cdef class Gutzwiller:
             # 2/3 - On-site repulsion
             for n in range(self.nmax + 1):
                 E += 0.5 * self.U * c_pow(c_abs(self.f[i_site, n]), 2) * n * (n - 1)
-
+ 
             # 3/3 - On-site chemical potential (trap included)
             E -= self.mu_local[i_site] * self.density[i_site]
+
         return E
 
     cpdef void one_real_time_step(self, double complex dtau):
-        cdef int i_site, n, k
-        cdef double complex prefactor = 1.0j * dtau  #FIXME which sign???
-        self.f_new[:, :] = 0.0
+        cdef int i_site, n, m
 
+        self.f_new[:, :] = 0.0
         for i_site in range(self.N_sites):
 
             # Build matrix
-            self.M[:, :] = 0.0 + 0.0j
-            for n in range(self.nmax + 1):
-                self.M[n, n] += prefactor * (0.5 * self.U * n * (n - 1.0) - self.mu_local[i_site] * n)
-            for n in range(1, self.nmax + 1):
-                self.M[n, n - 1] -= prefactor * self.sum_bmeans[i_site] * c_sqrt(n) * self.J  ##FIXME 
-            for n in range(0, self.nmax ):
-                self.M[n, n + 1] -= prefactor * c_conj(self.sum_bmeans[i_site]) * c_sqrt(n + 1) * self.J
+            self.M[:, :] = 0.0
+            for m in range(self.nmax + 1):
+                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
+            for m in range(0, self.nmax):
+                self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
+            for m in range(1, self.nmax + 1):
+                self.M[m - 1, m] -= self.J * c_conj(self.sum_bmeans[i_site]) * c_sqrt(m)
 
             # Update on-site coefficients
-            self.exp_M = scipy.linalg.expm(numpy.array(self.M[:, :]))
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))   #FIXME: SLOW!
+            #self.exp_M = scipy.sparse.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]).T)   #FIXME: SLOW!
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
                     self.f_new[i_site, n] += self.exp_M[n, m] * self.f[i_site, m]
@@ -227,3 +250,7 @@ cdef class Gutzwiller:
         self.update_sum_bmeans()
         self.update_density()
         self.E = self.compute_energy()
+
+
+
+
