@@ -126,7 +126,7 @@ cdef class Gutzwiller:
         self.update_bmean()
         self.update_sum_bmeans()
         self.update_density()
-        self.E = self.compute_energy()
+        self.update_energy()
 
     cpdef void initialize_trap(self, trap_center):
         cdef double r_sq, r
@@ -160,7 +160,7 @@ cdef class Gutzwiller:
         self.update_bmean()
         self.update_sum_bmeans()
         self.update_density()
-        self.E = self.compute_energy()
+        self.update_energy()
 
     def save_config(self, datafile):
         numpy.savetxt(datafile, numpy.array(self.f).view(float))
@@ -210,6 +210,7 @@ cdef class Gutzwiller:
         x_com /= self.N
         return x_com
 
+    @cython.cdivision(True)
     cdef void normalize_coefficients_single_site(self, int i_site):
         cdef int n
         cdef double norm_sq, inv_norm
@@ -249,27 +250,25 @@ cdef class Gutzwiller:
                 self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
             self.N += self.density[i_site]
 
-    cdef double compute_energy(self):
+    cdef void update_energy(self):
         cdef int i_site, j_site, j_nbr, n, m
-        cdef double E = 0.0
+        self.E = 0.0
         for i_site in range(self.N_sites):
 
             # 1/2 - Hopping
             for j_nbr in range(self.N_nbr[i_site]):
                 j_site = self.nbr[i_site, j_nbr]
-                E -= self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
+                self.E -= self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
 
             # 2/3 - On-site repulsion
             for n in range(self.nmax + 1):
-                E += 0.5 * self.U * c_pow(c_abs(self.f[i_site, n]), 2) * n * (n - 1)
+                self.E += 0.5 * self.U * c_pow(c_abs(self.f[i_site, n]), 2) * n * (n - 1)
  
             # 3/3 - On-site chemical potential (trap included)
-            E -= self.mu_local[i_site] * self.density[i_site]
-
-        return E
+            self.E -= self.mu_local[i_site] * self.density[i_site]
 
     cpdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1):
-        cdef int i_site, n, m
+        cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
 
         for i_site in range(self.N_sites):
@@ -278,13 +277,13 @@ cdef class Gutzwiller:
             self.M[:, :] = 0.0
             for m in range(self.nmax + 1):
                 self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
-            for m in range(0, self.nmax):
-                self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
-            for m in range(1, self.nmax + 1):
-                self.M[m - 1, m] -= self.J * c_conj(self.sum_bmeans[i_site]) * c_sqrt(m)
+                if m < self.nmax:
+                    self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
+                if m > 0:
+                    self.M[m - 1, m] -= self.J * c_conj(self.sum_bmeans[i_site]) * c_sqrt(m)
 
             # Update on-site coefficients
-            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))   #FIXME: SLOW!
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))
             self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
@@ -300,9 +299,7 @@ cdef class Gutzwiller:
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
             diff_bmean = self.bmean[i_site] - old_bmean
             for j_nbr in range(self.N_nbr[i_site]):
-                j_site = self.nbr[i_site, j_nbr]
-                self.sum_bmeans[j_site] += diff_bmean
+                self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
 
         self.update_density()
-        self.E = self.compute_energy()
-
+        self.update_energy()
