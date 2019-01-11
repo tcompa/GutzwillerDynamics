@@ -51,6 +51,7 @@ cdef class Gutzwiller:
     cdef public double [:] density
     cdef public double E
     cdef public double N
+    cdef double [:] x_com
 
     # Time evolution
     cdef int size_M
@@ -101,6 +102,7 @@ cdef class Gutzwiller:
                 self.nbr[self.L - 1, 0] = self.L - 2
         else:
             sys.exit('ERROR: By now only D=1 is implemented. Exit.')
+        self.x_com = numpy.zeros(D)
 
         # Define things for time evolution
         self.size_M = self.nmax + 1
@@ -123,8 +125,7 @@ cdef class Gutzwiller:
                 self.f[i_site, n] = random.random() + 1.0j * random.random()
         self.normalize_coefficients_all_sites()
 
-        self.update_bmean()
-        self.update_sum_bmeans()
+        self.update_bmeans()
         self.update_density()
         self.update_energy()
 
@@ -144,7 +145,6 @@ cdef class Gutzwiller:
                 r_sq += c_pow(self.site_coords[i_site, i_dim] - self.trap_center, 2)
             r = c_sqrt(r_sq)
             self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
-       
 
     def load_config(self, datafile):
         new_f = numpy.loadtxt(datafile).view(complex)
@@ -157,8 +157,7 @@ cdef class Gutzwiller:
             for n in range(self.nmax + 1):
                 self.f[i_site, n] = new_f[i_site, n]
         self.normalize_coefficients_all_sites()
-        self.update_bmean()
-        self.update_sum_bmeans()
+        self.update_bmeans()
         self.update_density()
         self.update_energy()
 
@@ -200,15 +199,14 @@ cdef class Gutzwiller:
                                                                    c_abs(self.bmean[i_site]), self.density[i_site]))
         print('-' * 80)
 
-    cpdef double compute_center_of_mass(self):
-        if self.D > 1:
-            sys.exit('ERROR: compute_center_of_mass is only defined for D=1. Exit.')
-        cdef double x_com = 0.0
-        cdef int i_site
-        for i_site in range(self.N_sites):
-            x_com += self.site_coords[i_site, 0] * self.density[i_site]
-        x_com /= self.N
-        return x_com
+    cpdef double [:] compute_center_of_mass(self):
+        self.x_com[:] = 0.0
+        cdef int i_site, i_dim
+        for i_dim in range(self.D):
+            for i_site in range(self.N_sites):
+                self.x_com[i_dim] += self.site_coords[i_site, i_dim] * self.density[i_site]
+            self.x_com[i_dim] /= self.N
+        return self.x_com
 
     @cython.cdivision(True)
     cdef void normalize_coefficients_single_site(self, int i_site):
@@ -226,20 +224,15 @@ cdef class Gutzwiller:
         for i_site in range(self.N_sites):
             self.normalize_coefficients_single_site(i_site)
 
-    cdef void update_bmean(self):
-        cdef int i_site, n
+    cdef void update_bmeans(self):
+        cdef int i_site, n, j_nbr, j_site
         self.bmean[:] = 0.0
+        self.sum_bmeans[:] = 0.0
         for i_site in range(self.N_sites):
             for n in range(0, self.nmax):
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
-
-    cdef void update_sum_bmeans(self):
-        cdef int i_site, j_nbr, j_site
-        self.sum_bmeans[:] = 0.0
-        for i_site in range(self.N_sites):
             for j_nbr in range(self.N_nbr[i_site]):
-                j_site = self.nbr[i_site, j_nbr]
-                self.sum_bmeans[i_site] += self.bmean[j_site]
+                self.sum_bmeans[self.nbr[i_site, j_nbr]] += self.bmean[i_site]
 
     cdef void update_density(self):
         cdef int i_site, n

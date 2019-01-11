@@ -50,7 +50,7 @@ print '  dt:     %f' % dt
 print '  nsteps: %i' % nsteps
 out = open('log_01_real_time_evolution.dat', 'w')
 for i_t in xrange(nsteps + 1):
-    out.write('%10.6f %.8f %.8f %.8f\n' % (i_t * dt, G.E, G.N, G.compute_center_of_mass()))
+    out.write('%10.6f %.8f %.8f %.8f\n' % (i_t * dt, G.E, G.N, G.compute_center_of_mass()[0]))
     G.one_sequential_time_step(dt, normalize_at_each_step=0)
     if i_t % 50 == 0 and i_t < 500:
         G.save_densities('data_02_densities_%08i.dat' % i_t)
