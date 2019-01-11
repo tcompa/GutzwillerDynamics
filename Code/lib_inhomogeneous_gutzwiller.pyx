@@ -38,14 +38,14 @@ cdef class Gutzwiller:
     cdef int [:, :] site_coords
 
     # Bose-Hubbard parameters
-    cdef double J, U, mu, VT
+    cdef public double J, U, mu, VT, trap_center
     cdef double [:] mu_local
     cdef int alphaT
 
     # State properties
     cdef int nmax
     cdef double complex [:, :] f
-    cdef double complex [:, :] f_new
+    cdef double complex [:] f_new
     cdef public double complex [:] bmean
     cdef double complex [:] sum_bmeans
     cdef public double [:] density
@@ -58,10 +58,10 @@ cdef class Gutzwiller:
     cdef double complex [:, :] exp_M
 
     def __init__(self,
-                 int nmax=3,                                    # cutoff on occupation (index goes from 0 to nmax)
-                 int D=1, int L=7, int OBC=0,                   # lattice parameters (site index goes from 0 to L-1 in each dimensions)
-                 double J=0.1, double U=1.0, double mu=0.5,     # homogeneous-model parameters
-                 double VT=0.0, int alphaT=0,                   # trap parameters
+                 int nmax=3,                                          # cutoff on occupation (index goes from 0 to nmax)
+                 int D=1, int L=7, int OBC=0,                         # lattice parameters (site index goes from 0 to L-1 in each dimensions)
+                 double J=0.1, double U=1.0, double mu=0.5,           # homogeneous-model parameters
+                 double VT=0.0, int alphaT=0, double trap_center=-1,  # trap parameters
                  int seed=-1,
                  ):
 
@@ -104,26 +104,15 @@ cdef class Gutzwiller:
 
         # Define things for time evolution
         self.size_M = self.nmax + 1
-        print('size_M: %i' % self.size_M)
         self.M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
         self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
 
         # Define trapping potential
-        if L % 2 == 0:
-            sys.exit('ERROR: If L is even, where should I put the trap center?')
-        cdef int trap_center = (L - 1) // 2
-        cdef double r, r_sq
-        self.mu_local = numpy.zeros(self.N_sites)
-        for i_site in range(self.N_sites):
-            r_sq = 0.0
-            for i_dim in range(self.D):
-                r_sq += c_pow(self.site_coords[i_site, i_dim] - trap_center, 2)
-            r = c_sqrt(r_sq)
-            self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
+        self.initialize_trap(trap_center)
 
         # Declare useful variables
         self.f = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
-        self.f_new = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
+        self.f_new = numpy.zeros(self.nmax + 1) + 0.0j
         self.bmean = numpy.zeros(self.N_sites) + 0.0j
         self.sum_bmeans = numpy.zeros(self.N_sites) + 0.0j
         self.density = numpy.zeros(self.N_sites)
@@ -132,14 +121,59 @@ cdef class Gutzwiller:
         for i_site in range(self.N_sites):
             for n in range(self.nmax + 1):
                 self.f[i_site, n] = random.random() + 1.0j * random.random()
-        self.normalize_gutzwiller_coefficients()
+        self.normalize_coefficients_all_sites()
 
         self.update_bmean()
         self.update_sum_bmeans()
         self.update_density()
         self.E = self.compute_energy()
 
+    cpdef void initialize_trap(self, trap_center):
+        cdef double r_sq, r
+        cdef int i_site, i_dim
+        self.trap_center = trap_center
+        if trap_center == -1:
+            if self.L % 2 == 0:
+                self.trap_center = (self.L - 1) // 2 + 0.5
+            else:
+                self.trap_center = (self.L - 1) // 2
+        self.mu_local = numpy.zeros(self.N_sites)
+        for i_site in range(self.N_sites):
+            r_sq = 0.0
+            for i_dim in range(self.D):
+                r_sq += c_pow(self.site_coords[i_site, i_dim] - self.trap_center, 2)
+            r = c_sqrt(r_sq)
+            self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
+       
+
+    def load_config(self, datafile):
+        new_f = numpy.loadtxt(datafile).view(complex)
+        new_Nsites = new_f.shape[0]
+        new_nmax = new_f.shape[1] - 1
+        print('Loading %s. N_sites=%i, nmax=%i' % (datafile, new_Nsites, new_nmax))
+        if (new_nmax != self.nmax) or (new_Nsites != self.N_sites):
+            sys.exit('ERROR: Loaded %s, but (%i,%i) != (%i, %i). Exit.' % (datafile, new_Nsites, new_nmax + 1, self.N_sites, self.nmax + 1))
+        for i_site in range(self.N_sites):
+            for n in range(self.nmax + 1):
+                self.f[i_site, n] = new_f[i_site, n]
+        self.normalize_coefficients_all_sites()
+        self.update_bmean()
+        self.update_sum_bmeans()
+        self.update_density()
+        self.E = self.compute_energy()
+
+    def save_config(self, datafile):
+        numpy.savetxt(datafile, numpy.array(self.f).view(float))
+
+    def save_densities(self, datafile):
+        cdef int i_site
+        with open(datafile, 'w') as out:
+            out.write('# site_index, density, |<b>|^2\n')
+            for i_site in range(self.N_sites):
+                out.write('%i %.8f %.8f\n' % (i_site, self.density[i_site], c_pow(c_abs(self.bmean[i_site]), 2)))
+
     def print_nbr_table(self):
+        cdef int i_site, k
         print('----- Neighbor table -----')
         for i_site in range(self.N_sites):
             print('i_site=%3i, nbr:' % i_site, end='')
@@ -157,24 +191,39 @@ cdef class Gutzwiller:
 
     def print_basic_info(self):
         cdef int i_site
-
+        print('-' * 80)
+        print('E = %f' % self.E)
+        print('N = %f' % self.N)
         for i_site in range(self.N_sites):
             print('i_site=%02i' % i_site, end='')
-            print(' <b>=(%+.4f, %+.4f), |<b>|=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]),
-                                                                 c_abs(self.bmean[i_site]), self.density[i_site]))
+            print(' <b>=(%+.4f, %+.4f), |<b>|^2=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]),
+                                                                   c_abs(self.bmean[i_site]), self.density[i_site]))
         print('-' * 80)
 
-    #@cython.cdivision(True)
-    cdef void normalize_gutzwiller_coefficients(self):
-        cdef int i_site, n
-        cdef double norm_sq, inv_norm
+    cpdef double compute_center_of_mass(self):
+        if self.D > 1:
+            sys.exit('ERROR: compute_center_of_mass is only defined for D=1. Exit.')
+        cdef double x_com = 0.0
+        cdef int i_site
         for i_site in range(self.N_sites):
-            norm_sq = 0.0
-            for n in range(self.nmax + 1):
-                norm_sq += c_pow(c_abs(self.f[i_site, n]), 2)
-            inv_norm = 1.0 / c_sqrt(norm_sq)
-            for n in range(self.nmax + 1):
-                self.f[i_site, n] *= inv_norm
+            x_com += self.site_coords[i_site, 0] * self.density[i_site]
+        x_com /= self.N
+        return x_com
+
+    cdef void normalize_coefficients_single_site(self, int i_site):
+        cdef int n
+        cdef double norm_sq, inv_norm
+        norm_sq = 0.0
+        for n in range(self.nmax + 1):
+            norm_sq += c_pow(c_abs(self.f[i_site, n]), 2)
+        inv_norm = 1.0 / c_sqrt(norm_sq)
+        for n in range(self.nmax + 1):
+            self.f[i_site, n] *= inv_norm
+
+    cdef void normalize_coefficients_all_sites(self):
+        cdef int i_site
+        for i_site in range(self.N_sites):
+            self.normalize_coefficients_single_site(i_site)
 
     cdef void update_bmean(self):
         cdef int i_site, n
@@ -219,10 +268,10 @@ cdef class Gutzwiller:
 
         return E
 
-    cpdef void one_real_time_step(self, double complex dtau):
+    cpdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1):
         cdef int i_site, n, m
+        cdef double complex old_bmean, diff_bmean
 
-        self.f_new[:, :] = 0.0
         for i_site in range(self.N_sites):
 
             # Build matrix
@@ -236,21 +285,24 @@ cdef class Gutzwiller:
 
             # Update on-site coefficients
             self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))   #FIXME: SLOW!
-            #self.exp_M = scipy.sparse.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]).T)   #FIXME: SLOW!
+            self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
-                    self.f_new[i_site, n] += self.exp_M[n, m] * self.f[i_site, m]
+                    self.f_new[n] += self.exp_M[n, m] * self.f[i_site, m]
+            self.f[i_site, :] = self.f_new[:]
+            if normalize_at_each_step == 1:
+                self.normalize_coefficients_single_site(i_site)
 
-        # Update all coefficients
-        self.f[:, :] = self.f_new[:, :]
+            # Update on-site bmean and off-site sum of bmean.
+            old_bmean = self.bmean[i_site]
+            self.bmean[i_site] = 0.0
+            for n in range(0, self.nmax):
+                self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
+            diff_bmean = self.bmean[i_site] - old_bmean
+            for j_nbr in range(self.N_nbr[i_site]):
+                j_site = self.nbr[i_site, j_nbr]
+                self.sum_bmeans[j_site] += diff_bmean
 
-        self.normalize_gutzwiller_coefficients()
-
-        self.update_bmean()
-        self.update_sum_bmeans()
         self.update_density()
         self.E = self.compute_energy()
-
-
-
 
