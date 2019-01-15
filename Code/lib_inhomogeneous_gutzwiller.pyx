@@ -1,17 +1,14 @@
 # cython: language_level=2
+# cython: profile=True
+# cython: linetrace=True
+# cython: binding=True
 
 from __future__ import print_function
-
+cimport cython
 import sys
-import math
 import random
-
 import numpy
-import scipy
-import cython
-
 import scipy.linalg
-import scipy.sparse.linalg
 
 
 cdef extern from "math.h" nogil:
@@ -25,6 +22,7 @@ cdef extern from "complex.h" nogil:
     double c_imag 'cimag' (double complex)
 
 
+@cython.profile(True)
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.initializedcheck(False)
@@ -234,7 +232,7 @@ cdef class Gutzwiller:
             for j_nbr in range(self.N_nbr[i_site]):
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += self.bmean[i_site]
 
-    cdef void update_density(self):
+    cpdef void update_density(self):
         cdef int i_site, n
         self.N = 0.0
         self.density[:] = 0.0
@@ -243,7 +241,7 @@ cdef class Gutzwiller:
                 self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
             self.N += self.density[i_site]
 
-    cdef void update_energy(self):
+    cpdef void update_energy(self):
         cdef int i_site, j_site, j_nbr, n, m
         self.E = 0.0
         for i_site in range(self.N_sites):
@@ -260,7 +258,8 @@ cdef class Gutzwiller:
             # 3/3 - On-site chemical potential (trap included)
             self.E -= self.mu_local[i_site] * self.density[i_site]
 
-    cpdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1):
+    @cython.profile(True)
+    cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
 
@@ -276,7 +275,8 @@ cdef class Gutzwiller:
                     self.M[m - 1, m] -= self.J * c_conj(self.sum_bmeans[i_site]) * c_sqrt(m)
 
             # Update on-site coefficients
-            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))
+            #self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
             self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
@@ -294,5 +294,27 @@ cdef class Gutzwiller:
             for j_nbr in range(self.N_nbr[i_site]):
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
 
+        if update_variables == 1:
+            self.update_density()
+            self.update_energy()
+
+    @cython.profile(True)
+    def many_time_steps(self, double complex dtau, int nsteps=10, int normalize_at_each_step=1):
+        cdef int i_step
+        for i_site in range(nsteps):
+            self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=0)
+        self.normalize_coefficients_all_sites()
         self.update_density()
         self.update_energy()
+
+    cpdef void update_J(self, double J):
+        self.J = J
+
+    cpdef void update_U(self, double U):
+        self.U = U
+
+    cpdef void update_mu(self, double mu):
+        self.mu = mu
+
+    cpdef void update_VT(self, double VT):
+        self.VT = VT
