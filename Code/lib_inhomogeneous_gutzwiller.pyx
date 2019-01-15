@@ -1,10 +1,7 @@
 # cython: language_level=2
-# cython: profile=True
-# cython: linetrace=True
-# cython: binding=True
 
 from __future__ import print_function
-cimport cython
+import cython
 import sys
 import random
 import numpy
@@ -22,7 +19,7 @@ cdef extern from "complex.h" nogil:
     double c_imag 'cimag' (double complex)
 
 
-@cython.profile(True)
+#@cython.profile(True)
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.initializedcheck(False)
@@ -258,7 +255,6 @@ cdef class Gutzwiller:
             # 3/3 - On-site chemical potential (trap included)
             self.E -= self.mu_local[i_site] * self.density[i_site]
 
-    @cython.profile(True)
     cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
@@ -271,11 +267,9 @@ cdef class Gutzwiller:
                 self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
                 if m < self.nmax:
                     self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
-                if m > 0:
-                    self.M[m - 1, m] -= self.J * c_conj(self.sum_bmeans[i_site]) * c_sqrt(m)
+                    self.M[m, m + 1] = c_conj(self.M[m + 1, m])
 
             # Update on-site coefficients
-            #self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.array(self.M[:, :]))
             self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
             self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
@@ -298,7 +292,6 @@ cdef class Gutzwiller:
             self.update_density()
             self.update_energy()
 
-    @cython.profile(True)
     def many_time_steps(self, double complex dtau, int nsteps=10, int normalize_at_each_step=1):
         cdef int i_step
         for i_site in range(nsteps):
