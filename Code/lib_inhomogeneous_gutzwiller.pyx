@@ -292,11 +292,10 @@ cdef class Gutzwiller:
             self.update_density()
             self.update_energy()
 
-    def many_time_steps(self, double complex dtau, int nsteps=10, int normalize_at_each_step=1):
+    def many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1):
         cdef int i_step
         for i_site in range(nsteps):
             self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=0)
-        self.normalize_coefficients_all_sites()
         self.update_density()
         self.update_energy()
 
