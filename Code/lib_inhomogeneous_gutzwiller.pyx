@@ -6,7 +6,6 @@ import sys
 import random
 import numpy
 import scipy.linalg
-import scipy.sparse.linalg
 
 
 cdef extern from "math.h" nogil:
@@ -259,20 +258,19 @@ cdef class Gutzwiller:
     cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
-        cdef double complex prefactor = 1.0j * dtau
 
         for i_site in range(self.N_sites):
 
             # Build matrix
-            for m in range(self.nmax):
-                self.M[m + 1, m] = - prefactor * self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
-                self.M[m, m + 1] = c_conj(self.M[m + 1, m])
-                self.M[m, m] = prefactor * (0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m)
-            m = self.nmax
-            self.M[m, m] = prefactor * (0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m)
+            self.M[:, :] = 0.0
+            for m in range(self.nmax + 1):
+                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
+                if m < self.nmax:
+                    self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
+                    self.M[m, m + 1] = c_conj(self.M[m + 1, m])
 
             # Update on-site coefficients
-            self.exp_M = scipy.sparse.linalg.expm(numpy.array(self.M))
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
             self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
