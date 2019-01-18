@@ -46,6 +46,7 @@ cdef class Gutzwiller:
     cdef public double [:] density
     cdef public double E
     cdef public double N
+    cdef public double N_cond
     cdef double [:] x_com
 
     # Time evolution
@@ -105,7 +106,13 @@ cdef class Gutzwiller:
         self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
 
         # Define trapping potential
-        self.initialize_trap(trap_center)
+        self.trap_center = trap_center
+        if trap_center == -1:
+            if self.L % 2 == 0:
+                self.trap_center = (self.L - 1) // 2 + 0.5
+            else:
+                self.trap_center = (self.L - 1) // 2
+        self.initialize_trap()
 
         # Declare useful variables
         self.f = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
@@ -124,15 +131,9 @@ cdef class Gutzwiller:
         self.update_density()
         self.update_energy()
 
-    cpdef void initialize_trap(self, trap_center):
+    cpdef void initialize_trap(self):
         cdef double r_sq, r
         cdef int i_site, i_dim
-        self.trap_center = trap_center
-        if trap_center == -1:
-            if self.L % 2 == 0:
-                self.trap_center = (self.L - 1) // 2 + 0.5
-            else:
-                self.trap_center = (self.L - 1) // 2
         self.mu_local = numpy.zeros(self.N_sites)
         for i_site in range(self.N_sites):
             r_sq = 0.0
@@ -223,11 +224,13 @@ cdef class Gutzwiller:
         cdef int i_site, n, j_nbr, j_site
         self.bmean[:] = 0.0
         self.sum_bmeans[:] = 0.0
+        self.N_cond = 0.0
         for i_site in range(self.N_sites):
             for n in range(0, self.nmax):
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
             for j_nbr in range(self.N_nbr[i_site]):
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += self.bmean[i_site]
+            self.N_cond += c_pow(c_abs(self.bmean[i_site]), 2.0)
 
     cpdef void update_density(self):
         cdef int i_site, n
@@ -289,13 +292,16 @@ cdef class Gutzwiller:
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
 
         if update_variables == 1:
+            self.update_bmeans()
             self.update_density()
             self.update_energy()
 
-    def many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1):
+    def many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, update_variables=0):
         cdef int i_step
         for i_site in range(nsteps):
-            self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=0)
+            self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=update_variables)
+
+        self.update_bmeans()  # FIXME: Only for N_cond?
         self.update_density()
         self.update_energy()
 
@@ -310,3 +316,9 @@ cdef class Gutzwiller:
 
     cpdef void update_VT(self, double VT):
         self.VT = VT
+        self.initialize_trap()
+
+    cpdef void update_trap_center(self, double trap_center):
+        self.trap_center = trap_center
+        self.initialize_trap()
+
