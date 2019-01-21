@@ -363,7 +363,7 @@ cdef class Gutzwiller:
 
     cpdef void update_mu(self, double mu):
         self.mu = mu
-        self.initialize_trap()
+        self.initialize_trap()    #NOTE: If this line is removed, set_mu_via_bisection() should be changed.
 
     cpdef void update_VT(self, double VT):
         self.VT = VT
@@ -373,39 +373,34 @@ cdef class Gutzwiller:
         self.trap_center = trap_center
         self.initialize_trap()
 
-    cpdef void set_mu_via_bisection(self,
+    cpdef int set_mu_via_bisection(self,
                                     double Ntarget=0.0, double mu_min=-3.0, double mu_max=3.0, double tol_N=0.1,
-                                    double complex dtau_times_J=0.2, int Verbose=0):
-        cdef double f_min, f_mid, f_max
+                                    double complex dtau_times_J=0.5):
+        cdef double f_min, f_mid, f_max, df
         cdef double mu_mid = 0.5 * (mu_min + mu_max)   # This is only to avoid a compile-time warning ("mu_mid’ may be used uninitialized..")
-        cdef double complex dtau = dtau_times_J / self.J
-        cdef int nsteps = 1000
+        cdef double complex dtau = dtau_times_J / self.J * 1.0j
+        cdef int nsteps = 200
+        cdef int bisection_iterations = 0
 
         self.update_mu(mu_min)
         self.initialize_gutzwiller_coefficients_random()
         self.many_time_steps(dtau, nsteps=nsteps)
         f_min = self.N - Ntarget
-        if Verbose == 1:
-            print('[bisection] mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
         if f_min > 0.0:
-            sys.exit('[bisection] mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
+            sys.exit('[bisection] ERROR: mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
 
         self.update_mu(mu_max)
-        self.initialize_trap()
         self.initialize_gutzwiller_coefficients_random()
         self.many_time_steps(dtau, nsteps=nsteps)
         f_max = self.N - Ntarget
-        if Verbose == 1:
-            print('[bisection] mu_max=%f f_max=%f' % (mu_max, f_max))
-        assert f_max > 0.0
+        if f_max < 0.0:
+            sys.exit('[bisection] ERROR: mu_max=%f, Ntarget=%f, N_max=%f' % (mu_max, Ntarget, self.N))
 
-        dd = 10.0 * tol_N
+        df = 10.0 * tol_N
         while df > tol_N:
-            df = f_max - f_min
+            bisection_iterations += 1
             mu_mid = 0.5 * (mu_min + mu_max)
-
             self.update_mu(mu_mid)
-            self.initialize_trap()
             self.initialize_gutzwiller_coefficients_random()
             self.many_time_steps(dtau, nsteps=nsteps)
             f_mid = self.N - Ntarget
@@ -413,14 +408,15 @@ cdef class Gutzwiller:
             if f_mid < 0.0:
                 mu_min = mu_mid
                 f_min = f_mid
-                assert f_min < 0.0
             else:
                 mu_max = mu_mid
                 f_max = f_mid
-                assert f_max > 0.0
+            df = f_max - f_min
 
         self.update_mu(mu_mid)
-        self.initialize_trap()
         self.initialize_gutzwiller_coefficients_random()
         self.many_time_steps(dtau, nsteps=nsteps)
-        assert abs(self.N - Ntarget) < tol_N
+        if abs(self.N - Ntarget) > tol_N:
+            sys.exit('[bisection] ERROR: mu=%f, Ntarget=%f, N=%f' % (self.mu, Ntarget, self.N))
+
+        return bisection_iterations
