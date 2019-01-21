@@ -27,10 +27,10 @@ cdef class Gutzwiller:
 
     # Lattice parameters
     cdef public int N_sites
-    cdef int D, L, z
+    cdef public int D, L, z, OBC
     cdef int [:, :] nbr
     cdef int [:] N_nbr
-    cdef int [:, :] site_coords
+    cdef public int [:, :] site_coords
 
     # Bose-Hubbard parameters
     cdef public double J, U, mu, VT, trap_center
@@ -63,8 +63,6 @@ cdef class Gutzwiller:
                  ):
 
         self.nmax = nmax
-        self.D = D
-        self.L = L
         self.J = J
         self.U = U
         self.mu = mu
@@ -78,26 +76,17 @@ cdef class Gutzwiller:
             random.seed(seed)
 
         # Define lattice and neighbor table
+        self.D = D
+        self.L = L
+        self.OBC = OBC
         self.N_sites = self.L ** self.D
         self.z = 2 * self.D  # hypercubic lattice
         self.nbr = numpy.zeros((self.N_sites, self.z), dtype=numpy.int32)
         self.site_coords = numpy.zeros((self.N_sites, self.D), dtype=numpy.int32)
         self.N_nbr = numpy.zeros(self.N_sites, dtype=numpy.int32)
-        if D == 1:
-            for i_site in range(self.N_sites):
-                self.site_coords[i_site] = i_site
-                self.N_nbr[i_site] = 2
-                self.nbr[i_site, 0] = (i_site - 1 + self.L) % self.L
-                self.nbr[i_site, 1] = (i_site + 1) % self.L
-            if OBC == 1:
-                if L < 2 or D > 1:
-                    sys.exit('ERROR: Trying to implement OBC with D=%i and L=%i. Exit.' % (self.D, self.L))
-                self.N_nbr[0] = 1
-                self.nbr[0, 0] = 1
-                self.N_nbr[self.L - 1] = 1
-                self.nbr[self.L - 1, 0] = self.L - 2
-        else:
-            sys.exit('ERROR: By now only D=1 is implemented. Exit.')
+        self.initialize_lattice()
+
+        # Declare center of mass
         self.x_com = numpy.zeros(D)
 
         # Define things for time evolution
@@ -130,6 +119,61 @@ cdef class Gutzwiller:
         self.update_bmeans()
         self.update_density()
         self.update_energy()
+
+
+    @cython.cdivision(True)
+    cdef void initialize_lattice(self):
+        cdef int i_site, x, y
+        cdef int [:] xy = numpy.zeros(2, dtype=numpy.int32)
+        if self.D == 1:
+            for i_site in range(self.N_sites):
+                self.site_coords[i_site] = i_site
+                self.N_nbr[i_site] = 2
+                self.nbr[i_site, 0] = (i_site - 1 + self.L) % self.L
+                self.nbr[i_site, 1] = (i_site + 1) % self.L
+            if self.OBC == 1:
+                if self.L < 2 or self.D > 1:
+                    sys.exit('ERROR: Trying to implement OBC with D=%i and L=%i. Exit.' % (self.D, self.L))
+                self.N_nbr[0] = 1
+                self.nbr[0, 0] = 1
+                self.N_nbr[self.L - 1] = 1
+                self.nbr[self.L - 1, 0] = self.L - 2
+        elif self.D == 2:
+            for i_site in range(self.N_sites):
+                self.i2xy(i_site, xy)
+                x = xy[0]
+                y = xy[1]
+                self.site_coords[i_site, :] = xy[:]
+                if self.OBC == 0:     # PBC
+                    self.N_nbr[i_site] = 4
+                    self.nbr[i_site, 0] = self.xy2i((x - 1 + self.L) % self.L, y)
+                    self.nbr[i_site, 1] = self.xy2i(x, (y - 1 + self.L) % self.L)
+                    self.nbr[i_site, 2] = self.xy2i((x + 1) % self.L, y)
+                    self.nbr[i_site, 3] = self.xy2i(x, (y + 1) % self.L)
+                else:                 # OBC
+                    self.N_nbr[i_site] = 0
+                    if x > 0:
+                        self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i((x - 1 + self.L) % self.L, y)
+                        self.N_nbr[i_site] += 1
+                    if y > 0:
+                        self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i(x, (y - 1 + self.L) % self.L)
+                        self.N_nbr[i_site] += 1
+                    if x < self.L - 1:
+                        self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i((x + 1) % self.L, y)
+                        self.N_nbr[i_site] += 1
+                    if y < self.L - 1:
+                        self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i(x, (y + 1) % self.L)
+                        self.N_nbr[i_site] += 1
+        else:
+            sys.exit('ERROR: By now only D=1 and D=2 are implemented, not D=%i Exit.' % self.D)
+
+    @cython.cdivision(True)
+    cpdef void i2xy(self, int _i, int [:] xy):
+        xy[0] = _i // self.L
+        xy[1] = _i - (_i // self.L) * self.L
+
+    cpdef int xy2i(self, int _x, int _y):
+        return  _x * self.L + _y
 
     cpdef void initialize_trap(self):
         cdef double r_sq, r
