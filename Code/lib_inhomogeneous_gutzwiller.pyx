@@ -111,15 +111,25 @@ cdef class Gutzwiller:
         self.density = numpy.zeros(self.N_sites)
 
         # Initialize Gutzwiller coefficients
-        for i_site in range(self.N_sites):
-            for n in range(self.nmax + 1):
-                self.f[i_site, n] = random.random() + 1.0j * random.random()
-        self.normalize_coefficients_all_sites()
+        self.initialize_gutzwiller_coefficients_random()
 
         self.update_bmeans()
         self.update_density()
         self.update_energy()
 
+    cdef void initialize_gutzwiller_coefficients_LDA(self):
+        # For each site, define a new instance of the Gutzwiller class with the local mu, and perform imaginary-time to find the best coefficients.
+        sys.exit('ERROR: initialize_gutzwiller_coefficients_LDA is not implemented. Exit.')
+        cdef int i_site
+        for i_site in range(self.N_sites):
+            # do things...
+            self.normalize_coefficients_single_site(i_site)
+
+    cdef void initialize_gutzwiller_coefficients_random(self):
+        for i_site in range(self.N_sites):
+            for n in range(self.nmax + 1):
+                self.f[i_site, n] = random.uniform(-1.0, 1.0) + 1.0j * random.uniform(-1.0, 0.1)
+        self.normalize_coefficients_all_sites()
 
     @cython.cdivision(True)
     cdef void initialize_lattice(self):
@@ -337,7 +347,7 @@ cdef class Gutzwiller:
             self.update_density()
             self.update_energy()
 
-    def many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, update_variables=0):
+    cpdef void many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, int update_variables=0):
         cdef int i_step
         for i_site in range(nsteps):
             self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=update_variables)
@@ -353,6 +363,7 @@ cdef class Gutzwiller:
 
     cpdef void update_mu(self, double mu):
         self.mu = mu
+        self.initialize_trap()
 
     cpdef void update_VT(self, double VT):
         self.VT = VT
@@ -362,3 +373,54 @@ cdef class Gutzwiller:
         self.trap_center = trap_center
         self.initialize_trap()
 
+    cpdef void set_mu_via_bisection(self,
+                                    double Ntarget=0.0, double mu_min=-3.0, double mu_max=3.0, double tol_N=0.1,
+                                    double complex dtau_times_J=0.2, int Verbose=0):
+        cdef double f_min, f_mid, f_max
+        cdef double mu_mid = 0.5 * (mu_min + mu_max)   # This is only to avoid a compile-time warning ("mu_mid’ may be used uninitialized..")
+        cdef double complex dtau = dtau_times_J / self.J
+        cdef int nsteps = 1000
+
+        self.update_mu(mu_min)
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        f_min = self.N - Ntarget
+        if Verbose == 1:
+            print('[bisection] mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
+        if f_min > 0.0:
+            sys.exit('[bisection] mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
+
+        self.update_mu(mu_max)
+        self.initialize_trap()
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        f_max = self.N - Ntarget
+        if Verbose == 1:
+            print('[bisection] mu_max=%f f_max=%f' % (mu_max, f_max))
+        assert f_max > 0.0
+
+        dd = 10.0 * tol_N
+        while df > tol_N:
+            df = f_max - f_min
+            mu_mid = 0.5 * (mu_min + mu_max)
+
+            self.update_mu(mu_mid)
+            self.initialize_trap()
+            self.initialize_gutzwiller_coefficients_random()
+            self.many_time_steps(dtau, nsteps=nsteps)
+            f_mid = self.N - Ntarget
+
+            if f_mid < 0.0:
+                mu_min = mu_mid
+                f_min = f_mid
+                assert f_min < 0.0
+            else:
+                mu_max = mu_mid
+                f_max = f_mid
+                assert f_max > 0.0
+
+        self.update_mu(mu_mid)
+        self.initialize_trap()
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        assert abs(self.N - Ntarget) < tol_N
