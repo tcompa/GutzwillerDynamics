@@ -1,2 +1,0 @@
-1. Store all parameters, if Verbose=True.
-2. If OBC, check (every now and then) that there is nothing at the boundary sites.
