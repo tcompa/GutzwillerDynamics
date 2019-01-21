@@ -373,11 +373,10 @@ cdef class Gutzwiller:
 
     cpdef int set_mu_via_bisection(self,
                                     double Ntarget=0.0, double mu_min=-3.0, double mu_max=3.0, double tol_N=0.1,
-                                    double complex dtau_times_J=0.5):
+                                    double complex dtau_times_J=1.0, int nsteps=100, int Verbose=1):
         cdef double f_min, f_mid, f_max, df
         cdef double mu_mid = 0.5 * (mu_min + mu_max)   # This is only to avoid a compile-time warning ("mu_mid’ may be used uninitialized..")
         cdef double complex dtau = dtau_times_J / self.J * 1.0j
-        cdef int nsteps = 200
         cdef int bisection_iterations = 0
 
         self.update_mu(mu_min)
@@ -386,6 +385,8 @@ cdef class Gutzwiller:
         f_min = self.N - Ntarget
         if f_min > 0.0:
             sys.exit('[bisection] ERROR: mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
+        if Verbose == 1:
+            print('[bisection] mu_min=%f, N_min=%f, Ntarget=%f' % (mu_min, self.N, Ntarget))
 
         self.update_mu(mu_max)
         self.initialize_gutzwiller_coefficients_random()
@@ -393,6 +394,8 @@ cdef class Gutzwiller:
         f_max = self.N - Ntarget
         if f_max < 0.0:
             sys.exit('[bisection] ERROR: mu_max=%f, Ntarget=%f, N_max=%f' % (mu_max, Ntarget, self.N))
+        if Verbose == 1:
+            print('[bisection] mu_max=%f, N_max=%f, Ntarget=%f' % (mu_max, self.N, Ntarget))
 
         df = 10.0 * tol_N
         while df > tol_N:
@@ -410,6 +413,8 @@ cdef class Gutzwiller:
                 mu_max = mu_mid
                 f_max = f_mid
             df = f_max - f_min
+            if Verbose == 1:
+                print('[bisection] (%02i) mu=(%f, %f), N=(%f, %f), Ntarget=%f' % (bisection_iterations, mu_min, mu_max, f_min + Ntarget, f_max + Ntarget, Ntarget))
 
         self.update_mu(mu_mid)
         self.initialize_gutzwiller_coefficients_random()
