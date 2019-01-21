@@ -205,11 +205,13 @@ cdef class Gutzwiller:
         numpy.savetxt(datafile, numpy.array(self.f).view(float))
 
     def save_densities(self, datafile):
-        cdef int i_site
+        cdef int i_site, i_dim
         with open(datafile, 'w') as out:
-            out.write('# site_index, density, |<b>|^2\n')
+            out.write('# site, density, |<b>|^2\n')
             for i_site in range(self.N_sites):
-                out.write('%i %.8f %.8f\n' % (i_site, self.density[i_site], c_pow(c_abs(self.bmean[i_site]), 2)))
+                for i_dim in range(self.D):
+                    out.write('%i ' % self.site_coords[i_site, i_dim])
+                out.write('%.8f %.8f\n' % (self.density[i_site], c_pow(c_abs(self.bmean[i_site]), 2)))
 
     def print_nbr_table(self):
         cdef int i_site, k
@@ -219,13 +221,6 @@ cdef class Gutzwiller:
             for k in range(self.N_nbr[i_site]):
                 print(' %i' % self.nbr[i_site, k], end='')
             print('\n', end='')
-        print('--------------------------')
-
-    def print_f_coefficients(self, int i_site):
-        print('------- f(site=%i) -------' % i_site)
-        for n in range(self.nmax + 1):
-            print(' (%+.4f, %+.4f)' % (c_real(self.f[i_site, n]), c_imag(self.f[i_site, n])), end='')
-        print('\n', end='')
         print('--------------------------')
 
     def print_basic_info(self):
@@ -326,11 +321,13 @@ cdef class Gutzwiller:
             if normalize_at_each_step == 1:
                 self.normalize_coefficients_single_site(i_site)
 
-            # Update on-site bmean and off-site sum of bmean.
+            # Update on-site bmean and off-site sum of bmean (and N_cond).
+            self.N_cond -= c_pow(c_abs(self.bmean[i_site]), 2)
             old_bmean = self.bmean[i_site]
             self.bmean[i_site] = 0.0
             for n in range(0, self.nmax):
                 self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
+            self.N_cond += c_pow(c_abs(self.bmean[i_site]), 2)
             diff_bmean = self.bmean[i_site] - old_bmean
             for j_nbr in range(self.N_nbr[i_site]):
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
@@ -345,7 +342,6 @@ cdef class Gutzwiller:
         for i_site in range(nsteps):
             self.one_sequential_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=update_variables)
 
-        self.update_bmeans()  # FIXME: Only for N_cond?
         self.update_density()
         self.update_energy()
 
