@@ -28,8 +28,8 @@ cdef class Gutzwiller:
     # Lattice parameters
     cdef public int N_sites
     cdef public int D, L, z, OBC
-    cdef int [:, :] nbr
-    cdef int [:] N_nbr
+    cdef public int [:, :] nbr
+    cdef public int [:] N_nbr
     cdef public int [:, :] site_coords
 
     # Bose-Hubbard parameters
@@ -89,19 +89,13 @@ cdef class Gutzwiller:
         # Declare center of mass
         self.x_com = numpy.zeros(D)
 
-        # Define things for time evolution
+        # Declare variables for time evolution
         self.size_M = self.nmax + 1
         self.M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
         self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
 
-        # Define trapping potential
-        self.trap_center = trap_center
-        if trap_center == -1:
-            if self.L % 2 == 0:
-                self.trap_center = (self.L - 1) // 2 + 0.5
-            else:
-                self.trap_center = (self.L - 1) // 2
-        self.initialize_trap()
+        # Define trapping potential [NOTE: a call to self.initialize_trap() is included in self.update_trap_center()]
+        self.update_trap_center(trap_center)
 
         # Declare useful variables
         self.f = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
@@ -118,14 +112,11 @@ cdef class Gutzwiller:
         self.update_energy()
 
     cdef void initialize_gutzwiller_coefficients_LDA(self):
-        # For each site, define a new instance of the Gutzwiller class with the local mu, and perform imaginary-time to find the best coefficients.
+        ''' Initialize local Gutzwiller coefficients with their optimal LDA values. '''
         sys.exit('ERROR: initialize_gutzwiller_coefficients_LDA is not implemented. Exit.')
-        cdef int i_site
-        for i_site in range(self.N_sites):
-            # do things...
-            self.normalize_coefficients_single_site(i_site)
 
     cdef void initialize_gutzwiller_coefficients_random(self):
+        ''' Initialize local Gutzwiller coefficients with random complex numbers. '''
         for i_site in range(self.N_sites):
             for n in range(self.nmax + 1):
                 self.f[i_site, n] = random.uniform(-1.0, 1.0) + 1.0j * random.uniform(-1.0, 0.1)
@@ -133,6 +124,7 @@ cdef class Gutzwiller:
 
     @cython.cdivision(True)
     cdef void initialize_lattice(self):
+        ''' Define lattice (site coordinates and table of neighbors). '''
         cdef int i_site, x, y
         cdef int [:] xy = numpy.zeros(2, dtype=numpy.int32)
         if self.D == 1:
@@ -154,13 +146,15 @@ cdef class Gutzwiller:
                 x = xy[0]
                 y = xy[1]
                 self.site_coords[i_site, :] = xy[:]
-                if self.OBC == 0:     # PBC
+                # Case 1: Periodic boundary conditions (PBC):
+                if self.OBC == 0:
                     self.N_nbr[i_site] = 4
                     self.nbr[i_site, 0] = self.xy2i((x - 1 + self.L) % self.L, y)
                     self.nbr[i_site, 1] = self.xy2i(x, (y - 1 + self.L) % self.L)
                     self.nbr[i_site, 2] = self.xy2i((x + 1) % self.L, y)
                     self.nbr[i_site, 3] = self.xy2i(x, (y + 1) % self.L)
-                else:                 # OBC
+                # Case 2: Open boundary conditions (OBC):
+                else:
                     self.N_nbr[i_site] = 0
                     if x > 0:
                         self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i((x - 1 + self.L) % self.L, y)
@@ -175,14 +169,16 @@ cdef class Gutzwiller:
                         self.nbr[i_site, self.N_nbr[i_site]] = self.xy2i(x, (y + 1) % self.L)
                         self.N_nbr[i_site] += 1
         else:
-            sys.exit('ERROR: By now only D=1 and D=2 are implemented, not D=%i Exit.' % self.D)
+            sys.exit('ERROR: By now only D=1 and D=2 are implemented, not D=%i. Exit.' % self.D)
 
     @cython.cdivision(True)
     cpdef void i2xy(self, int _i, int [:] xy):
+        ''' For a 2D lattice, convert between 1D and 2D representation of site. '''
         xy[0] = _i // self.L
         xy[1] = _i - (_i // self.L) * self.L
 
     cpdef int xy2i(self, int _x, int _y):
+        ''' For a 2D lattice, convert between 2D and 1D representation of site. '''
         return  _x * self.L + _y
 
     cpdef void initialize_trap(self):
@@ -197,6 +193,7 @@ cdef class Gutzwiller:
             self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
 
     def load_config(self, datafile):
+        ''' Load full configuration from a file. '''
         new_f = numpy.loadtxt(datafile).view(complex)
         new_Nsites = new_f.shape[0]
         new_nmax = new_f.shape[1] - 1
@@ -212,9 +209,12 @@ cdef class Gutzwiller:
         self.update_energy()
 
     def save_config(self, datafile):
+        ''' Store full configuration in a file. '''
         numpy.savetxt(datafile, numpy.array(self.f).view(float))
 
     def save_densities(self, datafile):
+        ''' Store local total/condensed densities on a file. '''
+        numpy.savetxt(datafile, numpy.array(self.f).view(float))
         cdef int i_site, i_dim
         with open(datafile, 'w') as out:
             out.write('# site, density, |<b>|^2\n')
@@ -233,17 +233,6 @@ cdef class Gutzwiller:
             print('\n', end='')
         print('--------------------------')
 
-    def print_basic_info(self):
-        cdef int i_site
-        print('-' * 80)
-        print('E = %f' % self.E)
-        print('N = %f' % self.N)
-        for i_site in range(self.N_sites):
-            print('i_site=%02i' % i_site, end='')
-            print(' <b>=(%+.4f, %+.4f), |<b>|^2=%.4f, <n>=%.4f' % (c_real(self.bmean[i_site]), c_imag(self.bmean[i_site]),
-                                                                   c_abs(self.bmean[i_site]), self.density[i_site]))
-        print('-' * 80)
-
     cpdef double [:] compute_center_of_mass(self):
         self.x_com[:] = 0.0
         cdef int i_site, i_dim
@@ -251,7 +240,7 @@ cdef class Gutzwiller:
             for i_site in range(self.N_sites):
                 self.x_com[i_dim] += self.site_coords[i_site, i_dim] * self.density[i_site]
             self.x_com[i_dim] /= self.N
-        return self.x_com
+        return self.x_com[:]
 
     @cython.cdivision(True)
     cdef void normalize_coefficients_single_site(self, int i_site):
@@ -270,6 +259,7 @@ cdef class Gutzwiller:
             self.normalize_coefficients_single_site(i_site)
 
     cdef void update_bmeans(self):
+        ''' Re-computes self.bmean, self.sum_bmeans and self.N_cond. '''
         cdef int i_site, n, j_nbr, j_site
         self.bmean[:] = 0.0
         self.sum_bmeans[:] = 0.0
@@ -282,6 +272,7 @@ cdef class Gutzwiller:
             self.N_cond += c_pow(c_abs(self.bmean[i_site]), 2.0)
 
     cpdef void update_density(self):
+        ''' Re-computes self.density and self.N. '''
         cdef int i_site, n
         self.N = 0.0
         self.density[:] = 0.0
@@ -291,22 +282,21 @@ cdef class Gutzwiller:
             self.N += self.density[i_site]
 
     cpdef void update_energy(self):
+        ''' Re-computes self.E (NOTE: This requires up-to-date self.bmean and self.density). '''
         cdef int i_site, j_site, j_nbr, n, m
+        cdef double f_n_square
         self.E = 0.0
         for i_site in range(self.N_sites):
-
-            # 1/2 - Hopping
+            # Nearest-neighbor hopping
             for j_nbr in range(self.N_nbr[i_site]):
                 j_site = self.nbr[i_site, j_nbr]
                 self.E -= self.J * c_real(c_conj(self.bmean[i_site]) * self.bmean[j_site])
-
-            # 2/3 - On-site repulsion
+            # On-site repulsion and local chemical potential
             for n in range(self.nmax + 1):
-                self.E += 0.5 * self.U * c_pow(c_abs(self.f[i_site, n]), 2) * n * (n - 1)
+                f_n_square = c_pow(c_abs(self.f[i_site, n]), 2)
+                self.E += 0.5 * self.U * f_n_square * n * (n - 1)
+                self.E -= self.mu_local[i_site] * f_n_square * n
  
-            # 3/3 - On-site chemical potential (trap included)
-            self.E -= self.mu_local[i_site] * self.density[i_site]
-
     cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
@@ -370,7 +360,15 @@ cdef class Gutzwiller:
         self.initialize_trap()
 
     cpdef void update_trap_center(self, double trap_center):
-        self.trap_center = trap_center
+        if trap_center > 0:
+            self.trap_center = trap_center
+        elif trap_center == -1:
+            if self.L % 2 == 0:
+                self.trap_center = (self.L - 1) // 2 + 0.5
+            else:
+                self.trap_center = (self.L - 1) // 2
+        else:
+            sys.exit('[update_trap_center] ERROR: Unrecognized value of trap_center=%f. Exit.' % trap_center)
         self.initialize_trap()
 
     cpdef int set_mu_via_bisection(self,

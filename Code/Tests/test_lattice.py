@@ -27,6 +27,17 @@ def test_lattice_definition_2D():
             assert x == xy[0]
             assert y == xy[1]
 
+def test_neighbors_reciprocity():
+    for OBC in [0, 1]:
+        for D in [1, 2]:
+            for L in [5, 10]:
+                G = Gutzwiller(D=D, L=L, OBC=OBC)
+                for i_site in xrange(G.N_sites):
+                    for j_nbr in xrange(G.N_nbr[i_site]):
+                        j_site = G.nbr[i_site, j_nbr]
+                        assert i_site in list(G.nbr[j_site, :])
+
 
 if __name__ == '__main__':
     test_lattice_definition_2D()
+    test_neighbors_reciprocity()
