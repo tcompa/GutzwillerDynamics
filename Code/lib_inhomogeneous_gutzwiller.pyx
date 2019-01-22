@@ -334,7 +334,6 @@ cdef class Gutzwiller:
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
 
         if update_variables == 1:
-            self.update_bmeans()
             self.update_density()
             self.update_energy()
 
