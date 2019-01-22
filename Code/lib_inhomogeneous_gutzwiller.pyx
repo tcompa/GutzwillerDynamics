@@ -458,6 +458,9 @@ cdef class Gutzwiller:
             self.one_sequential_time_step(dt, normalize_at_each_step=0, update_variables=0)
             t += dt
 
+        self.update_density()
+        self.update_energy()
+
 
 
 
