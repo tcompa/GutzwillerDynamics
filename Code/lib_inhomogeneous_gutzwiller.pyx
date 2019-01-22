@@ -35,7 +35,7 @@ cdef class Gutzwiller:
     # Bose-Hubbard parameters
     cdef public double J, U, mu, VT, trap_center
     cdef double [:] mu_local
-    cdef int alphaT
+    cdef double alphaT
 
     # State properties
     cdef int nmax
@@ -58,7 +58,7 @@ cdef class Gutzwiller:
                  int nmax=3,                                          # cutoff on occupation (index goes from 0 to nmax)
                  int D=1, int L=7, int OBC=0,                         # lattice parameters (site index goes from 0 to L-1 in each dimensions)
                  double J=0.1, double U=1.0, double mu=0.5,           # homogeneous-model parameters
-                 double VT=0.0, int alphaT=0, double trap_center=-1,  # trap parameters
+                 double VT=0.0, double alphaT=0, double trap_center=-1,  # trap parameters
                  int seed=-1,
                  ):
 
@@ -95,6 +95,7 @@ cdef class Gutzwiller:
         self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
 
         # Define trapping potential [NOTE: a call to self.initialize_trap() is included in self.update_trap_center()]
+        self.mu_local = numpy.zeros(self.N_sites)
         self.update_trap_center(trap_center)
 
         # Declare useful variables
@@ -184,7 +185,7 @@ cdef class Gutzwiller:
     cpdef void initialize_trap(self):
         cdef double r_sq, r
         cdef int i_site, i_dim
-        self.mu_local = numpy.zeros(self.N_sites)
+        self.mu_local[:] = 0.0
         for i_site in range(self.N_sites):
             r_sq = 0.0
             for i_dim in range(self.D):
@@ -423,3 +424,48 @@ cdef class Gutzwiller:
             sys.exit('[bisection] ERROR: mu=%f, Ntarget=%f, N=%f' % (self.mu, Ntarget, self.N))
 
         return bisection_iterations
+
+
+    @cython.cdivision(True)
+    cpdef void protocol_00_for_J_and_trap(self,
+                                          double J_i=0.07, double J_f=0.01, double JT_J=100.0,
+                                          double alpha_i=0.07, double alpha_f=0.01, double JT_alpha=100.0,
+                                          double Jdt=0.1):
+        cdef double t
+        cdef double T_J = JT_J / J_i
+        cdef double T_alpha = JT_alpha / J_i
+        cdef double inv_T_J = 1.0 / T_J
+        cdef double inv_T_alpha = 1.0 / T_alpha
+        cdef double two_by_Lm1 = 2.0 / (self.L - 1.0)
+        cdef double Tmax = max(T_J, T_alpha)
+
+        t = 0.0
+        while t + dt < Tmax:
+
+            # Update parameters
+            if t < T_J:
+                self.J = J_i + (J_f - J_i) * t * inv_T_J
+            else:
+                self.J = J_f
+            if t < T_alpha:
+                self.alphaT = alpha_i + (alpha_f - alpha_i) * t * inv_T_alpha
+            else:
+                self.alphaT = alpha_f
+            self.VT = self.U * 10.0 * c_pow(two_by_Lm1, self.alphaT)
+            self.initialize_trap()
+
+            # Perform one step of time evolution
+            dt = Jdt / self.J
+            self.one_sequential_time_step(dt, normalize_at_each_step=0, update_variables=0)
+            t += dt
+
+
+
+
+
+
+
+
+
+
+
