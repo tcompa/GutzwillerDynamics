@@ -456,7 +456,7 @@ cdef class Gutzwiller:
         out.write('# T_J:     %.3f\n' % T_J)
         out.write('# T_alpha: %.3f\n' % T_alpha)
         out.write('# J_i:     %.6f\n' % J_i)
-        out.write('# tmax:    %.3f\n' % tmax)
+        out.write('# Tmax:    %.3f\n' % Tmax)
         out.write('# t, J/U, mu0/U, VT/U, alpha,   E/U, N, N_cond, N_MI\n#\n')
         while t + dt < Tmax:
 
