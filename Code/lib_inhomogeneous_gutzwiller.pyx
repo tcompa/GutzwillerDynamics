@@ -453,8 +453,11 @@ cdef class Gutzwiller:
         t = 0.0
 
         out = open(datafile, 'w')
-
-        out.write('# t, J/U, mu0/U, VT/U, alpha,   E/U, N, N_cond\n#\n')
+        out.write('# T_J:     %.3f\n' % T_J)
+        out.write('# T_alpha: %.3f\n' % T_alpha)
+        out.write('# J_i:     %.6f\n' % J_i)
+        out.write('# tmax:    %.3f\n' % tmax)
+        out.write('# t, J/U, mu0/U, VT/U, alpha,   E/U, N, N_cond, N_MI\n#\n')
         while t + dt < Tmax:
 
             if i_t % skip_for_writing == 0:
