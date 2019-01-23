@@ -242,12 +242,12 @@ cdef class Gutzwiller:
             self.x_com[i_dim] /= self.N
         return self.x_com[:]
 
-    cpdef int count_MI_particles(self, double tol=0.01):
+    cpdef int count_MI_particles(self, double tol_MI=0.04):
         cdef int i_site, n, N_MI
         N_MI = 0
         for i_site in range(self.N_sites):
             for n in range(1, self.nmax + 1):
-                if c_pow(c_abs(self.f[i_site, n]), 2) > 1.0 - tol:
+                if c_pow(c_abs(self.f[i_site, n]), 2) > 1.0 - tol_MI:
                     N_MI += n
         return N_MI
 
@@ -437,7 +437,7 @@ cdef class Gutzwiller:
     cpdef void protocol_00_for_J_and_trap(self,
                                           double J_i=0.07, double J_f=0.01, double JT_J=100.0,
                                           double alpha_i=0.07, double alpha_f=0.01, double JT_alpha=100.0,
-                                          double Jdt=0.1, int skip_for_writing=10, datafile=None):
+                                          double Jdt=0.1, int skip_for_writing=10, datafile=None, double tol_MI=0.04):
         cdef int i_t, N_MI
         cdef double t
         cdef double dt
@@ -460,7 +460,7 @@ cdef class Gutzwiller:
             if i_t % skip_for_writing == 0:
                 self.update_density()
                 self.update_energy()
-                N_MI = self.count_MI_particles()
+                N_MI = self.count_MI_particles(tol_MI=tol_MI)
                 out.write('%11.6f %.8f %.8f %.8f %.8f  %.8f %.8f %.8f %i\n' % (t,
                                                                                self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT,
                                                                                self.E, self.N, self.N_cond, N_MI))
