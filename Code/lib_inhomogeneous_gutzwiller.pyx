@@ -438,7 +438,7 @@ cdef class Gutzwiller:
                                           double J_i=0.07, double J_f=0.01, double JT_J=100.0,
                                           double alpha_i=0.07, double alpha_f=0.01, double JT_alpha=100.0,
                                           double Jdt=0.1, int skip_for_writing=10, datafile=None):
-        cdef int i_t
+        cdef int i_t, N_MI
         cdef double t
         cdef double dt
         cdef double T_J = JT_J / J_i
@@ -460,8 +460,10 @@ cdef class Gutzwiller:
             if i_t % skip_for_writing == 0:
                 self.update_density()
                 self.update_energy()
-                out.write('%11.6f %.8f %.8f %.8f %.8f  %.8f %.8f %.8f\n' % (t, self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT,
-                                                                          self.E, self.N, self.N_cond))
+                N_MI = self.count_MI_particles()
+                out.write('%11.6f %.8f %.8f %.8f %.8f  %.8f %.8f %.8f %i\n' % (t,
+                                                                               self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT,
+                                                                               self.E, self.N, self.N_cond, N_MI))
 
             # Update parameters
             if t < T_J:
