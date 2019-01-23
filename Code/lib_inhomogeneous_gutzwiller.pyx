@@ -242,6 +242,15 @@ cdef class Gutzwiller:
             self.x_com[i_dim] /= self.N
         return self.x_com[:]
 
+    cpdef int count_MI_particles(self, double tol=0.01):
+        cdef int i_site, n, N_MI
+        N_MI = 0
+        for i_site in range(self.N_sites):
+            for n in range(1, self.nmax + 1):
+                if c_pow(c_abs(self.f[i_site, n]), 2) > 1.0 - tol:
+                    N_MI += n
+        return N_MI
+
     @cython.cdivision(True)
     cdef void normalize_coefficients_single_site(self, int i_site):
         cdef int n
