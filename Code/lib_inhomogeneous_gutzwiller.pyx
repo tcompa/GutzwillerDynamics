@@ -33,9 +33,8 @@ cdef class Gutzwiller:
     cdef public int [:, :] site_coords
 
     # Bose-Hubbard parameters
-    cdef public double J, U, mu, VT, trap_center
+    cdef public double J, U, mu, VT, trap_center, alphaT
     cdef double [:] mu_local
-    cdef double alphaT
 
     # State properties
     cdef int nmax
@@ -429,17 +428,31 @@ cdef class Gutzwiller:
     cpdef void protocol_00_for_J_and_trap(self,
                                           double J_i=0.07, double J_f=0.01, double JT_J=100.0,
                                           double alpha_i=0.07, double alpha_f=0.01, double JT_alpha=100.0,
-                                          double Jdt=0.1):
+                                          double Jdt=0.1, int skip_for_writing=10, datafile=None):
+        cdef int i_t
         cdef double t
+        cdef double dt
         cdef double T_J = JT_J / J_i
         cdef double T_alpha = JT_alpha / J_i
         cdef double inv_T_J = 1.0 / T_J
         cdef double inv_T_alpha = 1.0 / T_alpha
         cdef double two_by_Lm1 = 2.0 / (self.L - 1.0)
         cdef double Tmax = max(T_J, T_alpha)
+        cdef double V_edge = self.VT / c_pow(two_by_Lm1, self.alphaT)
 
+        i_t = 0
         t = 0.0
+
+        out = open(datafile, 'w')
+
+        out.write('# t, J/U, mu0/U, VT/U, alpha,   E/U, N, N_cond\n#\n')
         while t + dt < Tmax:
+
+            if i_t % skip_for_writing == 0:
+                self.update_density()
+                self.update_energy()
+                out.write('%11.6f %.8f %.8f %.8f %.8f  %.8f %.8f %.8f\n' % (t, self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT,
+                                                                          self.E, self.N, self.N_cond))
 
             # Update parameters
             if t < T_J:
@@ -450,24 +463,12 @@ cdef class Gutzwiller:
                 self.alphaT = alpha_i + (alpha_f - alpha_i) * t * inv_T_alpha
             else:
                 self.alphaT = alpha_f
-            self.VT = self.U * 10.0 * c_pow(two_by_Lm1, self.alphaT)
+            self.VT = V_edge * c_pow(two_by_Lm1, self.alphaT)
             self.initialize_trap()
 
             # Perform one step of time evolution
-            dt = Jdt / self.J
+            dt = Jdt / J_i
             self.one_sequential_time_step(dt, normalize_at_each_step=0, update_variables=0)
             t += dt
 
-        self.update_density()
-        self.update_energy()
-
-
-
-
-
-
-
-
-
-
-
+        return
