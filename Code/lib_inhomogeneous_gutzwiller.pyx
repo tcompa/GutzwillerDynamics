@@ -475,9 +475,10 @@ cdef class Gutzwiller:
                 self.update_density()
                 self.update_energy()
                 N_MI = self.count_MI_particles(tol_MI=tol_MI)
-                out.write('%11.6f %.8f %.8f %.8f %.8f  %.8f %.8f %.8f %i\n' % (t,
-                                                                               self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT,
-                                                                               self.E, self.N, self.N_cond, N_MI))
+                rsq = self.compute_rsq()
+                out.write('%11.6f   ' % t)
+                out.write('%.8f %.8f %.8f %.8f   ' % (self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT))
+                out.write('%.8f %.8f %.8f %i %f\n' % (self.E, self.N, self.N_cond, N_MI, rsq))
 
             # Update parameters
             if t < T_J:
