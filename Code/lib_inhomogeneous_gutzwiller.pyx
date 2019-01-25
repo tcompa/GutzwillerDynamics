@@ -242,6 +242,17 @@ cdef class Gutzwiller:
             self.x_com[i_dim] /= self.N
         return self.x_com[:]
 
+    @cython.cdivision(True)
+    cpdef double compute_rsq(self):
+        cdef int i_site, i_dim
+        cdef double r_sq
+        r_sq = 0.0
+        for i_site in range(self.N_sites):
+            for i_dim in range(self.D):
+                r_sq += c_pow(self.site_coords[i_site, i_dim] - self.trap_center, 2)
+        r_sq /= self.N
+        return r_sq
+
     cpdef int count_MI_particles(self, double tol_MI=0.04):
         cdef int i_site, n, N_MI
         N_MI = 0
