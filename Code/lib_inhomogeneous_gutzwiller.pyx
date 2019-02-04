@@ -249,7 +249,7 @@ cdef class Gutzwiller:
         r_sq = 0.0
         for i_site in range(self.N_sites):
             for i_dim in range(self.D):
-                r_sq += c_pow(self.site_coords[i_site, i_dim] - self.trap_center, 2)
+                r_sq += self.density[i_site] * c_pow(self.site_coords[i_site, i_dim] - self.trap_center, 2)
         r_sq /= self.N
         return r_sq
 
