@@ -194,7 +194,7 @@ cdef class Gutzwiller:
 
     def print_gutzwiller_coefficients_at_one_site(self, int i_site):
         for n in range(self.nmax + 1):
-            print('%i Re(f)=%+.8f Im(f)=%+.8f abs(f)=%.8f' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
+            print('%i Re(f)=%+.10f Im(f)=%+.10f abs(f)=%.10f' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
 
     def load_config(self, datafile):
         ''' Load full configuration from a file. '''
