@@ -393,7 +393,7 @@ cdef class Gutzwiller:
     cpdef int set_mu_via_bisection(self,
                                     double Ntarget=0.0, double mu_min=-3.0, double mu_max=3.0, double tol_N=0.1,
                                     double complex dtau_times_J=1.0, int nsteps=100, int Verbose=1):
-        cdef double f_min, f_mid, f_max, df
+        cdef double f_VTmin, f_VTmid, f_VTmax, df
         cdef double mu_mid = 0.5 * (mu_min + mu_max)   # This is only to avoid a compile-time warning ("mu_mid’ may be used uninitialized..")
         cdef double complex dtau = dtau_times_J / self.J * 1.0j
         cdef int bisection_iterations = 0
@@ -440,6 +440,60 @@ cdef class Gutzwiller:
         self.many_time_steps(dtau, nsteps=nsteps)
         if abs(self.N - Ntarget) > tol_N:
             sys.exit('[bisection] ERROR: mu=%f, Ntarget=%f, N=%f' % (self.mu, Ntarget, self.N))
+
+        return bisection_iterations
+
+    cpdef int set_VT_via_bisection(self,
+                                    double Ntarget=0.0, double VT_min=0.001, double VT_max=1.0, double tol_N=0.1,
+                                    double complex dtau_times_J=1.0, int nsteps=100, int Verbose=1):
+        cdef double f_VTmin, f_VTmid, f_VTmax, df
+        cdef double VT_mid = 0.5 * (VT_min + VT_max)   # This is only to avoid a compile-time warning ("VT_mid’ may be used uninitialized..")
+        cdef double complex dtau = dtau_times_J / self.J * 1.0j
+        cdef int bisection_iterations = 0
+
+        self.update_VT(VT_min)
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        f_VTmin = self.N - Ntarget
+        if f_VTmin < 0.0:
+            sys.exit('[bisection] ERROR: VT_min=%f, Ntarget=%f, N_VTmin=%f' % (VT_min, Ntarget, self.N))
+        if Verbose == 1:
+            print('[bisection] VT_min=%f, N_VTmin=%f, Ntarget=%f' % (VT_min, self.N, Ntarget))
+
+        self.update_VT(VT_max)
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        f_VTmax = self.N - Ntarget
+        if f_VTmax > 0.0:
+            sys.exit('[bisection] ERROR: VT_max=%f, Ntarget=%f, N_VTmax=%f' % (VT_max, Ntarget, self.N))
+        if Verbose == 1:
+            print('[bisection] VT_max=%f, N_VTmax=%f, Ntarget=%f' % (VT_max, self.N, Ntarget))
+
+        df = 10.0 * tol_N
+        while abs(df) > tol_N:
+            bisection_iterations += 1
+            VT_mid = 0.5 * (VT_min + VT_max)
+            self.update_VT(VT_mid)
+            self.initialize_gutzwiller_coefficients_random()
+            self.many_time_steps(dtau, nsteps=nsteps)
+            f_VTmid = self.N - Ntarget
+
+            if f_VTmid > 0.0:
+                VT_min = VT_mid
+                f_VTmin = f_VTmid
+            else:
+                VT_max = VT_mid
+                f_VTmax = f_VTmid
+            df = f_VTmin - f_VTmax
+            if Verbose == 1:
+                print('[bisection] (%02i) VT=(%f, %f), N=(%f, %f), Ntarget=%f' % (bisection_iterations, VT_min, VT_max, f_VTmin + Ntarget, f_VTmax + Ntarget, Ntarget))
+            assert df > 0.0
+
+        self.update_VT(VT_mid)
+        self.initialize_gutzwiller_coefficients_random()
+        self.many_time_steps(dtau, nsteps=nsteps)
+        if abs(self.N - Ntarget) > tol_N:
+            sys.exit('[bisection] ERROR: VT=%f, Ntarget=%f, N=%f' % (self.VT, Ntarget, self.N))
 
         return bisection_iterations
 
