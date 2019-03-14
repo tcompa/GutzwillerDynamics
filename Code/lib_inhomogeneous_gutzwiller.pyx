@@ -192,6 +192,10 @@ cdef class Gutzwiller:
             r = c_sqrt(r_sq)
             self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
 
+    def print_gutzwiller_coefficients_at_one_site(self, int i_site):
+        for n in range(self.nmax + 1):
+            print('%i Re(f)=%+.8f Im(f)=%+.8f abs(f)=%.8f' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
+
     def load_config(self, datafile):
         ''' Load full configuration from a file. '''
         new_f = numpy.loadtxt(datafile).view(complex)
