@@ -368,6 +368,56 @@ cdef class Gutzwiller:
         self.update_density()
         self.update_energy()
 
+    cdef void one_global_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
+        cdef int i_site, n, m, j_nbr
+        cdef double complex old_bmean, diff_bmean
+
+        for i_site in range(self.N_sites):
+
+            # Build matrix
+            self.M[:, :] = 0.0
+            for m in range(self.nmax + 1):
+                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
+                if m < self.nmax:
+                    self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
+                    self.M[m, m + 1] = c_conj(self.M[m + 1, m])
+
+            # Update on-site coefficients
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
+            self.f_new[:] = 0.0
+            for n in range(self.nmax + 1):
+                for m in range(self.nmax + 1):
+                    self.f_new[n] += self.exp_M[n, m] * self.f[i_site, m]
+            self.f[i_site, :] = self.f_new[:]
+            if normalize_at_each_step == 1:
+                self.normalize_coefficients_single_site(i_site)
+
+            # Update on-site bmean and off-site sum of bmean (and N_cond).
+            #self.N_cond -= c_pow(c_abs(self.bmean[i_site]), 2)
+            #old_bmean = self.bmean[i_site]
+            #self.bmean[i_site] = 0.0
+            #for n in range(0, self.nmax):
+            #    self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
+            #self.N_cond += c_pow(c_abs(self.bmean[i_site]), 2)
+            #diff_bmean = self.bmean[i_site] - old_bmean
+            #for j_nbr in range(self.N_nbr[i_site]):
+            #    self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
+        self.update_bmeans()
+
+        if update_variables == 1:
+            self.update_density()
+            self.update_energy()
+
+
+    cpdef void many_global_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, int update_variables=0):
+        cdef int i_step
+        for i_site in range(nsteps):
+            self.one_global_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=update_variables)
+
+        self.update_density()
+        self.update_energy()
+
+
     cpdef void update_J(self, double J):
         self.J = J
 
