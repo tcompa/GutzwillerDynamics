@@ -1,8 +1,8 @@
 # Time_dependent_Gutzwiller
 Complex-coefficient Gutzwiller state for the Bose-Hubbard model on an extended lattice, suitable for both imaginary-time and real-time evolution.
 
-## IMPORTANT
-**WARNING:** This code is still not complete, use it at your own risk!
+## Important
+This code is not yet complete, use it at your own risk!
 
 ## What is this?
 This is a simple python/cython code implementing the inhomogeneous Gutzwiller
@@ -14,7 +14,7 @@ The Gutzwiller coefficients are complex-valued, so that this code can be used bo
 This code requires the [numpy](http://www.numpy.org/), [scipy](https://www.scipy.org/scipylib/download.html) and
 [cython](http://cython.org/) libraries (plus the
 [future](https://pypi.python.org/pypi/future) library, if you are on python 2).
-Elementary tests are available in the `Tests` folder, and they are performed at each commit - see
+Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see
 the current status on https://travis-ci.org/tcompa/...).
 
 Before being imported in a python script, the module
