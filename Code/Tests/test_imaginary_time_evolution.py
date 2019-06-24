@@ -1,15 +1,7 @@
 from __future__ import print_function
-import os
 import sys
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['NUMEXPR_NUM_THREADS'] = '1'
-os.environ['OMP_NUM_THREADS'] = '1'
-import numpy
 
-repo = 'Time_dependent_Gutzwiller/'
-rootdir = os.path.abspath(os.getcwd()).split(repo)[0] + repo
-codedir = rootdir + 'Code'
-sys.path.append(codedir)
+sys.path.append('..')
 from lib_inhomogeneous_gutzwiller import Gutzwiller
 
 
@@ -29,11 +21,14 @@ def perform_imaginary_time_evolution_1D(J):
     print()
     assert abs(G.E - E_expected) < 1e-4
 
+
 def test_imaginary_time_evolution_1D_JbyU015():
     perform_imaginary_time_evolution_1D(0.15)
 
+
 def test_imaginary_time_evolution_1D_JbyU005():
     perform_imaginary_time_evolution_1D(0.05)
+
 
 if __name__ == '__main__':
     test_imaginary_time_evolution_1D_JbyU005()

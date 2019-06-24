@@ -1,16 +1,9 @@
 from __future__ import print_function
-import os
-import sys
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['NUMEXPR_NUM_THREADS'] = '1'
-os.environ['OMP_NUM_THREADS'] = '1'
-import numpy
 import itertools
+import numpy
+import sys
 
-repo = 'Time_dependent_Gutzwiller/'
-rootdir = os.path.abspath(os.getcwd()).split(repo)[0] + repo
-codedir = rootdir + 'Code'
-sys.path.append(codedir)
+sys.path.append('..')
 from lib_inhomogeneous_gutzwiller import Gutzwiller
 
 
@@ -26,6 +19,7 @@ def test_lattice_definition_2D():
             G.i2xy(i_site, xy)
             assert x == xy[0]
             assert y == xy[1]
+
 
 def test_neighbors_reciprocity():
     for OBC in [0, 1]:

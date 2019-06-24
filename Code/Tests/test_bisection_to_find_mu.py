@@ -1,15 +1,7 @@
 from __future__ import print_function
-import os
 import sys
-os.environ['MKL_NUM_THREADS'] = '1'
-os.environ['NUMEXPR_NUM_THREADS'] = '1'
-os.environ['OMP_NUM_THREADS'] = '1'
-import numpy
 
-repo = 'Time_dependent_Gutzwiller/'
-rootdir = os.path.abspath(os.getcwd()).split(repo)[0] + repo
-codedir = rootdir + 'Code'
-sys.path.append(codedir)
+sys.path.append('..')
 from lib_inhomogeneous_gutzwiller import Gutzwiller
 
 
@@ -22,6 +14,7 @@ def test_bisection_to_find_mu():
     print('Ntarget:     %f' % Ntarget)
     print('G.mu:        %.8f   (N=%f)' % (G.mu, G.N))
     assert (G.N - Ntarget) < tol
+
 
 if __name__ == '__main__':
     test_bisection_to_find_mu()
