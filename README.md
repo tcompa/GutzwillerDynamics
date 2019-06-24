@@ -1,17 +1,13 @@
-# Time_dependent_Gutzwiller
-Complex-coefficient Gutzwiller state for the Bose-Hubbard model on an extended lattice, suitable for both imaginary-time and real-time evolution.
+# GutzwillerDynamics
 
 ## Important
 This code is not yet complete, use it at your own risk!
 
 ## What is this?
-This is a simple python/cython code implementing the inhomogeneous Gutzwiller
-variational wave function for the [Bose-Hubbard
-model](https://en.wikipedia.org/wiki/Bose%E2%80%93Hubbard_model).
-The Gutzwiller coefficients are complex-valued, so that this code can be used both for imaginary-time and real-time evolution.
+This program implements the Gutzwiller variational wave function for the [Bose-Hubbard model](https://en.wikipedia.org/wiki/Bose%E2%80%93Hubbard_model). The Gutzwiller coefficients are site-dependent (so that, for instance, one can add an additional confining potential) and complex-valued (so that this code can be used both for imaginary- and real-time evolution).
 
 ## How to use it?
-This code requires the [numpy](http://www.numpy.org/), [scipy](https://www.scipy.org/scipylib/download.html) and
+This is a python code, which requires the [numpy](http://www.numpy.org/), [scipy](https://www.scipy.org/scipylib/download.html) and
 [cython](http://cython.org/) libraries (plus the
 [future](https://pypi.python.org/pypi/future) library, if you are on python 2).
 Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see
