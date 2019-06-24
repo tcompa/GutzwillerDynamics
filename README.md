@@ -1,5 +1,8 @@
 # GutzwillerDynamics
 
+[![Build Status](https://travis-ci.org/tcompa/GutzwillerDynamics.svg?branch=master)](https://travis-ci.org/tcompa/GutzwillerDynamics)
+
+
 ## Important
 This code is not yet complete, use it at your own risk!
 
@@ -11,7 +14,7 @@ This is a python code, which requires the [numpy](http://www.numpy.org/), [scipy
 [cython](http://cython.org/) libraries (plus the
 [future](https://pypi.python.org/pypi/future) library, if you are on python 2).
 Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see
-the current status on https://travis-ci.org/tcompa/...).
+the current status on https://travis-ci.org/tcompa/GutzwillerDynamics).
 
 Before being imported in a python script, the module
 `lib_inhomogeneous_gutzwiller.pyx` has to be compiled through the command
