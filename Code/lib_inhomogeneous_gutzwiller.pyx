@@ -19,7 +19,6 @@ cdef extern from "complex.h" nogil:
     double c_imag 'cimag' (double complex)
 
 
-#@cython.profile(True)
 @cython.wraparound(False)
 @cython.boundscheck(False)
 @cython.initializedcheck(False)
@@ -54,9 +53,9 @@ cdef class Gutzwiller:
     cdef double complex [:, :] exp_M
 
     def __init__(self,
-                 int nmax=3,                                          # cutoff on occupation (index goes from 0 to nmax)
-                 int D=1, int L=7, int OBC=0,                         # lattice parameters (site index goes from 0 to L-1 in each dimensions)
-                 double J=0.1, double U=1.0, double mu=0.5,           # homogeneous-model parameters
+                 int nmax=3,                                             # cutoff on occupation (index goes from 0 to nmax)
+                 int D=1, int L=7, int OBC=0,                            # lattice parameters (site index goes from 0 to L-1 in each dimensions)
+                 double J=0.1, double U=1.0, double mu=0.5,              # homogeneous-model parameters
                  double VT=0.0, double alphaT=0, double trap_center=-1,  # trap parameters
                  int seed=-1,
                  ):
@@ -392,16 +391,6 @@ cdef class Gutzwiller:
             if normalize_at_each_step == 1:
                 self.normalize_coefficients_single_site(i_site)
 
-            # Update on-site bmean and off-site sum of bmean (and N_cond).
-            #self.N_cond -= c_pow(c_abs(self.bmean[i_site]), 2)
-            #old_bmean = self.bmean[i_site]
-            #self.bmean[i_site] = 0.0
-            #for n in range(0, self.nmax):
-            #    self.bmean[i_site] += c_conj(self.f[i_site, n]) * self.f[i_site, n + 1] * c_sqrt(n + 1)
-            #self.N_cond += c_pow(c_abs(self.bmean[i_site]), 2)
-            #diff_bmean = self.bmean[i_site] - old_bmean
-            #for j_nbr in range(self.N_nbr[i_site]):
-            #    self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
         self.update_bmeans()
 
         if update_variables == 1:
