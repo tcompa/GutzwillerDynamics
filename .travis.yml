@@ -1,8 +1,6 @@
 language: python
 python:
   - "2.7"
-  - "3.4"
-  - "3.5"
   - "3.6"
 
 install:
@@ -11,4 +9,4 @@ install:
 script:
 - cd Code
 - python setup_cython.py build_ext --inplace
-- nosetests -s -v -w tests
+- nosetests -s -v -w Tests
