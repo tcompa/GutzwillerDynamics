@@ -20,7 +20,6 @@ from Cython.Compiler import Options
 
 # Set general options
 define_macros = []
-#libraries = ['gsl', 'gslcblas']
 libraries = []
 
 Profiling = True
