@@ -2,3 +2,4 @@ lib_*.c
 lib_*.so
 lib_*.html
 todo
+Profiling
