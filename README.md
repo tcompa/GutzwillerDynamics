@@ -21,4 +21,4 @@ Before being imported in a python script, the module
 to be issued in the `Code` folder.
 After this step, `lib_inhomogeneous_gutzwiller` can be imported in ordinary python scripts (have a look at the `Examples` folder).
 
-Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see the current status on https://travis-ci.org/tcompa/GutzwillerDynamics).
+Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see the current status on https://travis-ci.org/tcompa/GutzwillerDynamics.

@@ -48,17 +48,19 @@ print('Final energy:               E/U =  %.6f' % (G.E / G.U))
 print()
 G.save_densities('data_ex3_densities_before_time_evolution.dat')
 
-# Change some parameters
-VT_new = VT * 0.1
-G.update_VT(VT_new)
 
 # Parameters for real-time evolution
-dt = 0.01 / J
-nsteps = 200
+dt = 0.005 / J
+nsteps = 400
 
 # Real-time evolution
 alldata = []
 for step in xrange(nsteps):
+
+    # Change some parameters
+    VT_new = VT * 0.9
+    G.update_VT(VT_new)
+
     alldata.append([step * dt * U] + numpy.array(G.density).tolist())
     G.many_time_steps(dt, nsteps=1, normalize_at_each_step=0, update_variables=1)
 alldata.append([nsteps * dt * U] + numpy.array(G.density).tolist())
