@@ -55,7 +55,7 @@ nsteps = 400
 
 # Real-time evolution
 alldata = []
-for step in xrange(nsteps):
+for step in range(nsteps):
 
     # Change some parameters
     VT_new = VT * 0.9
@@ -76,7 +76,7 @@ G.save_densities('data_ex3_densities_after_time_evolution.dat')
 
 # Do plot of densities
 alldata = numpy.array(alldata).T
-for i in xrange(L):
+for i in range(L):
     plt.plot(alldata[0], alldata[i + 1], alpha=0.8, label='Site %i' % i)
 plt.plot(alldata[0], alldata[1:].mean(axis=0), ls='--', c='k', lw=2)
 plt.xlabel('Time $t \\qquad [1/U]$', fontsize=14)
