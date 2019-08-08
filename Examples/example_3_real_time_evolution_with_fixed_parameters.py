@@ -58,7 +58,7 @@ nsteps = 200
 
 # Real-time evolution
 alldata = []
-for step in xrange(nsteps):
+for step in range(nsteps):
     alldata.append([step * dt * U] + numpy.array(G.density).tolist())
     G.many_time_steps(dt, nsteps=1, normalize_at_each_step=0, update_variables=1)
 alldata.append([nsteps * dt * U] + numpy.array(G.density).tolist())
@@ -74,7 +74,7 @@ G.save_densities('data_ex3_densities_after_time_evolution.dat')
 
 # Do plot of densities
 alldata = numpy.array(alldata).T
-for i in xrange(L):
+for i in range(L):
     plt.plot(alldata[0], alldata[i + 1], alpha=0.8, label='Site %i' % i)
 plt.plot(alldata[0], alldata[1:].mean(axis=0), ls='--', c='k', lw=2)
 plt.xlabel('Time $t \\qquad [1/U]$', fontsize=14)
