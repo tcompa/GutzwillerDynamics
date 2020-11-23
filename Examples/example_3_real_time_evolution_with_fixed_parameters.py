@@ -52,6 +52,13 @@ G.save_densities('data_ex3_densities_before_time_evolution.dat')
 VT_new = VT * 0.1
 G.update_VT(VT_new)
 
+# Update energy
+G.update_energy()
+print('Right after the quench:')
+print('Energy:                     E/U =  %.6f' % (G.E / G.U))
+print()
+
+
 # Parameters for real-time evolution
 dt = 0.01 / J
 nsteps = 200
