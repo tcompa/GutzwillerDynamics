@@ -1,7 +1,6 @@
 # GutzwillerDynamics
 
 [![Build Status](https://travis-ci.org/tcompa/GutzwillerDynamics.svg?branch=master)](https://travis-ci.org/tcompa/GutzwillerDynamics)
-
 [![DOI](https://zenodo.org/badge/164842990.svg)](https://zenodo.org/badge/latestdoi/164842990)
 
 
