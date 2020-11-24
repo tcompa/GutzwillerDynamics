@@ -1,4 +1,5 @@
-# cython: language_level=2
+# cython: language_level=3, boundscheck=False, wraparound=False, initializedcheck=False, embedsignature=True, linetrace=True
+
 
 from __future__ import print_function
 import cython
@@ -19,9 +20,6 @@ cdef extern from "complex.h" nogil:
     double c_imag 'cimag' (double complex)
 
 
-@cython.wraparound(False)
-@cython.boundscheck(False)
-@cython.initializedcheck(False)
 cdef class Gutzwiller:
 
     # Lattice parameters
@@ -194,6 +192,13 @@ cdef class Gutzwiller:
     def print_gutzwiller_coefficients_at_one_site(self, int i_site):
         for n in range(self.nmax + 1):
             print('%i Re(f)=%+.10f Im(f)=%+.10f abs(f)=%.12f' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
+
+    def save_gutzwiller_coefficients_at_one_site(self, int i_site, filename):
+        with open(filename, 'w') as out:
+            out.write('# site=%i\n' % i_site)
+            out.write('# n, Re(f_n), Im(f_n), |f_n| \n')
+            for n in range(self.nmax + 1):
+                out.write('%3i %+.10e %+.10e %.10e\n' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
 
     def load_config(self, datafile):
         ''' Load full configuration from a file. '''
@@ -446,18 +451,18 @@ cdef class Gutzwiller:
         self.many_time_steps(dtau, nsteps=nsteps)
         f_min = self.N - Ntarget
         if f_min > 0.0:
-            sys.exit('[bisection] ERROR: mu_min=%f, Ntarget=%f, N_min=%f' % (mu_min, Ntarget, self.N))
+            sys.exit('[bisection] ERROR: mu_min=%.8f, Ntarget=%.8f, N_min=%.8f' % (mu_min, Ntarget, self.N))
         if Verbose == 1:
-            print('[bisection] mu_min=%f, N_min=%f, Ntarget=%f' % (mu_min, self.N, Ntarget))
+            print('[bisection] mu_min=%.8f, N_min=%.8f, Ntarget=%.8f' % (mu_min, self.N, Ntarget))
 
         self.update_mu(mu_max)
         self.initialize_gutzwiller_coefficients_random()
         self.many_time_steps(dtau, nsteps=nsteps)
         f_max = self.N - Ntarget
         if f_max < 0.0:
-            sys.exit('[bisection] ERROR: mu_max=%f, Ntarget=%f, N_max=%f' % (mu_max, Ntarget, self.N))
+            sys.exit('[bisection] ERROR: mu_max=%.8f, Ntarget=%.8f, N_max=%.8f' % (mu_max, Ntarget, self.N))
         if Verbose == 1:
-            print('[bisection] mu_max=%f, N_max=%f, Ntarget=%f' % (mu_max, self.N, Ntarget))
+            print('[bisection] mu_max=%.8f, N_max=%.8f, Ntarget=%.8f' % (mu_max, self.N, Ntarget))
 
         df = 10.0 * tol_N
         while df > tol_N:
@@ -476,13 +481,13 @@ cdef class Gutzwiller:
                 f_max = f_mid
             df = f_max - f_min
             if Verbose == 1:
-                print('[bisection] (%02i) mu=(%f, %f), N=(%f, %f), Ntarget=%f' % (bisection_iterations, mu_min, mu_max, f_min + Ntarget, f_max + Ntarget, Ntarget))
+                print('[bisection] (%02i) mu=(%.8f, %.8f), N=(%.8f, %.8f), Ntarget=%.8f' % (bisection_iterations, mu_min, mu_max, f_min + Ntarget, f_max + Ntarget, Ntarget))
 
         self.update_mu(mu_mid)
         self.initialize_gutzwiller_coefficients_random()
         self.many_time_steps(dtau, nsteps=nsteps)
         if abs(self.N - Ntarget) > tol_N:
-            sys.exit('[bisection] ERROR: mu=%f, Ntarget=%f, N=%f' % (self.mu, Ntarget, self.N))
+            sys.exit('[bisection] ERROR: mu=%.8f, Ntarget=%.8f, N=%.8f' % (self.mu, Ntarget, self.N))
 
         return bisection_iterations
 
@@ -539,59 +544,3 @@ cdef class Gutzwiller:
             sys.exit('[bisection] ERROR: VT=%f, Ntarget=%f, N=%f' % (self.VT, Ntarget, self.N))
 
         return bisection_iterations
-
-
-    @cython.cdivision(True)
-    cpdef void protocol_00_for_J_and_trap(self,
-                                          double J_i=0.07, double J_f=0.01, double JT_J=100.0,
-                                          double alpha_i=0.07, double alpha_f=0.01, double JT_alpha=100.0,
-                                          double Jdt=0.1, int skip_for_writing=10, datafile=None, double tol_MI=0.04):
-        cdef int i_t, N_MI
-        cdef double t
-        cdef double dt
-        cdef double T_J = JT_J / J_i
-        cdef double T_alpha = JT_alpha / J_i
-        cdef double inv_T_J = 1.0 / T_J
-        cdef double inv_T_alpha = 1.0 / T_alpha
-        cdef double two_by_Lm1 = 2.0 / (self.L - 1.0)
-        cdef double Tmax = max(T_J, T_alpha)
-        cdef double V_edge = self.VT / c_pow(two_by_Lm1, self.alphaT)
-
-        i_t = 0
-        t = 0.0
-
-        out = open(datafile, 'w')
-        out.write('# T_J:     %.3f\n' % T_J)
-        out.write('# T_alpha: %.3f\n' % T_alpha)
-        out.write('# J_i:     %.6f\n' % J_i)
-        out.write('# Tmax:    %.3f\n' % Tmax)
-        out.write('# t, J/U, mu0/U, VT/U, alpha,   E/U, N, N_cond, N_MI\n#\n')
-        while t + dt < Tmax:
-
-            if i_t % skip_for_writing == 0:
-                self.update_density()
-                self.update_energy()
-                N_MI = self.count_MI_particles(tol_MI=tol_MI)
-                rsq = self.compute_rsq()
-                out.write('%11.6f   ' % t)
-                out.write('%.8f %.8f %.8f %.8f   ' % (self.J / self.U, self.mu / self.U, self.VT / self.U, self.alphaT))
-                out.write('%.8f %.8f %.8f %i %f\n' % (self.E, self.N, self.N_cond, N_MI, rsq))
-
-            # Update parameters
-            if t < T_J:
-                self.J = J_i + (J_f - J_i) * t * inv_T_J
-            else:
-                self.J = J_f
-            if t < T_alpha:
-                self.alphaT = alpha_i + (alpha_f - alpha_i) * t * inv_T_alpha
-            else:
-                self.alphaT = alpha_f
-            self.VT = V_edge * c_pow(two_by_Lm1, self.alphaT)
-            self.initialize_trap()
-
-            # Perform one step of time evolution
-            dt = Jdt / J_i
-            self.one_sequential_time_step(dt, normalize_at_each_step=0, update_variables=0)
-            t += dt
-
-        return
