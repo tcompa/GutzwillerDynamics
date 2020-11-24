@@ -1,0 +1,13 @@
+#!/usr/bin/gnuplot -p
+
+set terminal pdfcairo enhanced
+set output 'fig_ex5_center_of_mass.pdf'
+
+set title "Center-of-mass motion after trap shift by A=2 lattice constants\nL=22 chain, <N>=20, {/Symbol m}/U=-2.4630171, U/J=0.2, V/J=0.3"
+set xlabel 't J' font ',13'
+set ylabel 'Center of mass' font ',13'
+set xrange [0:15]
+
+p\
+ 'data_ex5_reference_snoek2007PRL.dat' w p title '[Snoek 2007 PRL]'\
+,'data_ex5_dynamics.dat' u 1:4 w l lw 1.5 title 'This work'\
