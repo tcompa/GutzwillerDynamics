@@ -11,8 +11,7 @@ This program implements the Gutzwiller variational wave function for the [Bose-H
 
 ## How to use it?
 This is a python code, which requires the [numpy](http://www.numpy.org/), [scipy](https://www.scipy.org/scipylib/download.html) and
-[cython](http://cython.org/) libraries (plus the
-[future](https://pypi.python.org/pypi/future) library, if you are on python 2).
+[cython](http://cython.org/) libraries. You may also need the [future](https://pypi.python.org/pypi/future) library (if you are on Python 2) and [matplotlib](https://matplotlib.org/) or [gnuplot](http://www.gnuplot.info/) (for some of the examples).
 
 Before being imported in a python script, the module
 `lib_inhomogeneous_gutzwiller.pyx` has to be compiled through the command
