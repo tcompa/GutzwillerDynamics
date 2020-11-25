@@ -41,7 +41,7 @@ G.print_parameters()
 # Imaginary-time dynamics
 G.many_time_steps(1.0j * dt, nsteps=nsteps)
 print('Optimization completed')
-print('Number of particles:  E/U =  %.6f' % G.N)
+print('Number of particles:  <N> =  %.6f' % G.N)
 print('Energy:               E/U =  %.6f' % (G.E / G.U))
 print('Densities:')
 for i_site in range(G.N_sites):
