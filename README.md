@@ -23,3 +23,34 @@ to be issued in the `Code` folder.
 After this step, `lib_inhomogeneous_gutzwiller` can be imported in ordinary python scripts (have a look at the `Examples` folder).
 
 Elementary tests are available in the `Code/Tests` folder, and they are performed at each commit - see the current status on https://travis-ci.org/tcompa/GutzwillerDynamics.
+
+
+## Relevant parameters
+
+Here are the relevant parameters of the Gutzwiller ansatz and of the Bose-Hubbard Hamiltonian:
+
+    Gutzwiller ansatz for a Bose-Hubbard model.
+
+    Parameters:
+        D               Lattice dimensionality (allowed values: 1, 2)
+        L               Linear size of lattice
+        OBC             Boundary conditions (OBC=1 for OBC, OBC=0 for PBC)
+        J               Nearest-neighbor hopping parameter (see Hamiltonian)
+        U               On-site interaction parameter (see Hamiltonian)
+        mu              Chemical potential (see Hamiltonian)
+        Vnn             Nearest-neighbor interaction parameter (see Hamiltonian)
+        VT              Trap prefactor (see Hamiltonian)
+        alphaT          Trap exponent (see Hamiltonian)
+        trap_center     Trap center (see Hamiltonian)
+        nmax            Cutoff on the local occupation number (state indices go from 0 to nmax)
+
+    The Hamiltonian includes several terms.
+    Here we denote the sum over the neighbors of site i as sum_{j~i}.
+        - J * sum_{i} sum_{j~i} b_i^dagger b_j
+        + U * sum_{i} n_i * (n_i - 1)
+        + sum_{i} n_i * ( -mu + VT * |x_i - trap_center|^alpha )
+        + (Vnn/2) sum_{i} sum_{j~i} n_i * n_j
+
+    NOTE:
+    1) In the nearest-neighbor-interaction term, I use (Vnn/2) because each pair of neighbors is counted twice.
+    2) In the hopping term, I use J (and not J/2) because pairs (i,j) and (j,i) are not equivalent (due to the Hermitian conjugate).
