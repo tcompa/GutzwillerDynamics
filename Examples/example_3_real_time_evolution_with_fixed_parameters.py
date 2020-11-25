@@ -9,7 +9,7 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
 import sys
-import numpy
+import numpy as np
 import matplotlib.pyplot as plt
 
 # Replace the following line with the actual code path
@@ -43,7 +43,7 @@ G.many_time_steps(1.0j * dt, nsteps=nsteps)
 print('End of ground-state search (via imaginary-time evolution)')
 print('Chemical potential:         mu/U = %.6f' % (G.mu / G.U))
 print('Final number of particles:  N =    %.6f' % G.N)
-print('Final density:              <n> =  %.6f' % numpy.mean(G.density))
+print('Final density:              <n> =  %.6f' % np.mean(G.density))
 print('Final energy:               E/U =  %.6f' % (G.E / G.U))
 print()
 G.save_densities('data_ex3_densities_before_time_evolution.dat')
@@ -66,21 +66,21 @@ nsteps = 200
 # Real-time evolution
 alldata = []
 for step in range(nsteps):
-    alldata.append([step * dt * U] + numpy.array(G.density).tolist())
+    alldata.append([step * dt * U] + np.array(G.density).tolist())
     G.many_time_steps(dt, nsteps=1, normalize_at_each_step=0, update_variables=1)
-alldata.append([nsteps * dt * U] + numpy.array(G.density).tolist())
+alldata.append([nsteps * dt * U] + np.array(G.density).tolist())
 
 # Print some output and save the density profile
 print('End of real-time evolution')
 print('Chemical potential:         mu/U = %.6f' % (G.mu / G.U))
 print('Final number of particles:  N =    %.6f' % G.N)
-print('Final density:              <n> =  %.6f' % numpy.mean(G.density))
+print('Final density:              <n> =  %.6f' % np.mean(G.density))
 print('Final energy:               E/U =  %.6f' % (G.E / G.U))
 print()
 G.save_densities('data_ex3_densities_after_time_evolution.dat')
 
 # Do plot of densities
-alldata = numpy.array(alldata).T
+alldata = np.array(alldata).T
 for i in range(L):
     plt.plot(alldata[0], alldata[i + 1], alpha=0.8, label='Site %i' % i)
 plt.plot(alldata[0], alldata[1:].mean(axis=0), ls='--', c='k', lw=2)

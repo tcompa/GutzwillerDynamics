@@ -5,7 +5,7 @@ from __future__ import print_function
 import cython
 import sys
 import random
-import numpy
+import numpy as np
 import scipy.linalg
 
 
@@ -30,7 +30,7 @@ cdef class Gutzwiller:
     cdef public int [:, :] site_coords
 
     # Bose-Hubbard parameters
-    cdef public double J, U, mu, VT, trap_center, alphaT
+    cdef public double J, U, Vnn, mu, VT, trap_center, alphaT
     cdef double [:] mu_local
 
     # State properties
@@ -51,10 +51,10 @@ cdef class Gutzwiller:
     cdef double complex [:, :] exp_M
 
     def __init__(self,
-                 int nmax=3,                                             # cutoff on occupation (index goes from 0 to nmax)
-                 int D=1, int L=7, int OBC=0,                            # lattice parameters (site index goes from 0 to L-1 in each dimensions)
-                 double J=0.1, double U=1.0, double mu=0.5,              # homogeneous-model parameters
-                 double VT=0.0, double alphaT=0, double trap_center=-1,  # trap parameters
+                 int nmax=3,                                                 # cutoff on occupation (index goes from 0 to nmax)
+                 int D=1, int L=7, int OBC=0,                                # lattice parameters (sites go from 0 to L-1 in each dimensions)
+                 double J=0.1, double U=1.0, double mu=0.5, double Vnn=0.0,  # homogeneous-model parameters
+                 double VT=0.0, double alphaT=0, double trap_center=-1,      # trap parameters
                  int seed=-1,
                  ):
 
@@ -63,6 +63,7 @@ cdef class Gutzwiller:
         self.U = U
         self.mu = mu
         self.VT = VT
+        self.Vnn = Vnn
         self.alphaT = alphaT
 
         cdef int i_site, i_dim, n
@@ -77,29 +78,29 @@ cdef class Gutzwiller:
         self.OBC = OBC
         self.N_sites = self.L ** self.D
         self.z = 2 * self.D  # hypercubic lattice
-        self.nbr = numpy.zeros((self.N_sites, self.z), dtype=numpy.int32)
-        self.site_coords = numpy.zeros((self.N_sites, self.D), dtype=numpy.int32)
-        self.N_nbr = numpy.zeros(self.N_sites, dtype=numpy.int32)
+        self.nbr = np.zeros((self.N_sites, self.z), dtype=np.int32)
+        self.site_coords = np.zeros((self.N_sites, self.D), dtype=np.int32)
+        self.N_nbr = np.zeros(self.N_sites, dtype=np.int32)
         self.initialize_lattice()
 
         # Declare center of mass
-        self.x_com = numpy.zeros(D)
+        self.x_com = np.zeros(D)
 
         # Declare variables for time evolution
         self.size_M = self.nmax + 1
-        self.M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
-        self.exp_M = numpy.zeros((self.size_M, self.size_M)) + 0.0j
+        self.M = np.zeros((self.size_M, self.size_M)) + 0.0j
+        self.exp_M = np.zeros((self.size_M, self.size_M)) + 0.0j
 
         # Define trapping potential [NOTE: a call to self.initialize_trap() is included in self.update_trap_center()]
-        self.mu_local = numpy.zeros(self.N_sites)
+        self.mu_local = np.zeros(self.N_sites)
         self.update_trap_center(trap_center)
 
         # Declare useful variables
-        self.f = numpy.zeros((self.N_sites, self.nmax + 1)) + 0.0j
-        self.f_new = numpy.zeros(self.nmax + 1) + 0.0j
-        self.bmean = numpy.zeros(self.N_sites) + 0.0j
-        self.sum_bmeans = numpy.zeros(self.N_sites) + 0.0j
-        self.density = numpy.zeros(self.N_sites)
+        self.f = np.zeros((self.N_sites, self.nmax + 1)) + 0.0j
+        self.f_new = np.zeros(self.nmax + 1) + 0.0j
+        self.bmean = np.zeros(self.N_sites) + 0.0j
+        self.sum_bmeans = np.zeros(self.N_sites) + 0.0j
+        self.density = np.zeros(self.N_sites)
 
         # Initialize Gutzwiller coefficients
         self.initialize_gutzwiller_coefficients_random()
@@ -123,7 +124,7 @@ cdef class Gutzwiller:
     cdef void initialize_lattice(self):
         ''' Define lattice (site coordinates and table of neighbors). '''
         cdef int i_site, x, y
-        cdef int [:] xy = numpy.zeros(2, dtype=numpy.int32)
+        cdef int [:] xy = np.zeros(2, dtype=np.int32)
         if self.D == 1:
             for i_site in range(self.N_sites):
                 self.site_coords[i_site] = i_site
@@ -189,6 +190,28 @@ cdef class Gutzwiller:
             r = c_sqrt(r_sq)
             self.mu_local[i_site] = self.mu - self.VT * c_pow(r, self.alphaT)
 
+    def print_parameters(self):
+        print()
+        print('PARAMETERS')
+        print('  # Lattice:')
+        print('    D:              %i' % self.D)
+        print('    L:              %i' % self.L)
+        print('    OBC:            %i' % self.OBC)
+        print('  # Trap:')
+        print('    VT:             %.8f' % self.VT)
+        print('    alphaT:         %.8f' % self.alphaT)
+        print('    trap_center:    %.8f' % self.trap_center)
+        print('  # Bose-Hubbard:')
+        print('    J:              %.8f' % self.J)
+        print('    U:              %.8f' % self.U)
+        print('    Vnn:            %.8f' % self.Vnn)
+        print('  # Gutzwiller')
+        print('    nmax:           %i' % self.nmax)
+        print()
+
+    def get_gutzwiller_coefficients_at_one_site(self, int i_site):
+        return np.array(self.f[i_site, :])
+
     def print_gutzwiller_coefficients_at_one_site(self, int i_site):
         for n in range(self.nmax + 1):
             print('%i Re(f)=%+.10f Im(f)=%+.10f abs(f)=%.12f' % (n, c_real(self.f[i_site, n]), c_imag(self.f[i_site, n]), c_abs(self.f[i_site, n])))
@@ -202,7 +225,7 @@ cdef class Gutzwiller:
 
     def load_config(self, datafile):
         ''' Load full configuration from a file. '''
-        new_f = numpy.loadtxt(datafile).view(complex)
+        new_f = np.loadtxt(datafile).view(complex)
         new_Nsites = new_f.shape[0]
         new_nmax = new_f.shape[1] - 1
         print('Loading %s. N_sites=%i, nmax=%i' % (datafile, new_Nsites, new_nmax))
@@ -218,11 +241,11 @@ cdef class Gutzwiller:
 
     def save_config(self, datafile):
         ''' Store full configuration in a file. '''
-        numpy.savetxt(datafile, numpy.array(self.f).view(float))
+        np.savetxt(datafile, np.array(self.f).view(float))
 
     def save_densities(self, datafile):
         ''' Store local total/condensed densities on a file. '''
-        numpy.savetxt(datafile, numpy.array(self.f).view(float))
+        np.savetxt(datafile, np.array(self.f).view(float))
         cdef int i_site, i_dim
         with open(datafile, 'w') as out:
             out.write('# site, density, |<b>|^2\n')
@@ -324,23 +347,35 @@ cdef class Gutzwiller:
                 f_n_square = c_pow(c_abs(self.f[i_site, n]), 2)
                 self.E += 0.5 * self.U * f_n_square * n * (n - 1)
                 self.E -= self.mu_local[i_site] * f_n_square * n
+            # Nearest-neighbor interaction
+            for j_nbr in range(self.N_nbr[i_site]):
+                j_site = self.nbr[i_site, j_nbr]
+                self.E += 0.5 * self.Vnn * self.density[i_site] * self.density[j_site]
  
     cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
         cdef double complex old_bmean, diff_bmean
+        cdef double sum_density_on_neighbors
+
+        cdef double N_new = 0.0
 
         for i_site in range(self.N_sites):
+
+            # Compute sum of densities over neighbors
+            sum_density_on_neighbors = 0.0
+            for j_nbr in range(self.N_nbr[i_site]):
+                sum_density_on_neighbors += self.density[self.nbr[i_site, j_nbr]]
 
             # Build matrix
             self.M[:, :] = 0.0
             for m in range(self.nmax + 1):
-                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
+                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m + 0.5 * self.Vnn * sum_density_on_neighbors * m
                 if m < self.nmax:
                     self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
                     self.M[m, m + 1] = c_conj(self.M[m + 1, m])
 
             # Update on-site coefficients
-            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
+            self.exp_M = scipy.linalg.expm(1.0j * dtau * np.asarray(self.M))
             self.f_new[:] = 0.0
             for n in range(self.nmax + 1):
                 for m in range(self.nmax + 1):
@@ -360,8 +395,17 @@ cdef class Gutzwiller:
             for j_nbr in range(self.N_nbr[i_site]):
                 self.sum_bmeans[self.nbr[i_site, j_nbr]] += diff_bmean
 
+            # Update on-site density
+            self.density[i_site] = 0.0
+            for n in range(0, self.nmax + 1):
+                self.density[i_site] += c_pow(c_abs(self.f[i_site, n]), 2) * n
+            N_new += self.density[i_site]
+
+        # Update total number of particles
+        self.N = N_new
+
+        # Update energy
         if update_variables == 1:
-            self.update_density()
             self.update_energy()
 
     cpdef void many_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, int update_variables=0):
@@ -371,46 +415,6 @@ cdef class Gutzwiller:
 
         self.update_density()
         self.update_energy()
-
-    cdef void one_global_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
-        cdef int i_site, n, m, j_nbr
-        cdef double complex old_bmean, diff_bmean
-
-        for i_site in range(self.N_sites):
-
-            # Build matrix
-            self.M[:, :] = 0.0
-            for m in range(self.nmax + 1):
-                self.M[m, m] += 0.5 * self.U * m * (m - 1.0) - self.mu_local[i_site] * m
-                if m < self.nmax:
-                    self.M[m + 1, m] -= self.J * self.sum_bmeans[i_site] * c_sqrt(m + 1)
-                    self.M[m, m + 1] = c_conj(self.M[m + 1, m])
-
-            # Update on-site coefficients
-            self.exp_M = scipy.linalg.expm(1.0j * dtau * numpy.asarray(self.M))
-            self.f_new[:] = 0.0
-            for n in range(self.nmax + 1):
-                for m in range(self.nmax + 1):
-                    self.f_new[n] += self.exp_M[n, m] * self.f[i_site, m]
-            self.f[i_site, :] = self.f_new[:]
-            if normalize_at_each_step == 1:
-                self.normalize_coefficients_single_site(i_site)
-
-        self.update_bmeans()
-
-        if update_variables == 1:
-            self.update_density()
-            self.update_energy()
-
-
-    cpdef void many_global_time_steps(self, double complex dtau, int nsteps=1, int normalize_at_each_step=1, int update_variables=0):
-        cdef int i_step
-        for i_site in range(nsteps):
-            self.one_global_time_step(dtau, normalize_at_each_step=normalize_at_each_step, update_variables=update_variables)
-
-        self.update_density()
-        self.update_energy()
-
 
     cpdef void update_J(self, double J):
         self.J = J

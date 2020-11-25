@@ -19,7 +19,7 @@ from lib_inhomogeneous_gutzwiller import Gutzwiller
 
 print()
 print('WARNING: with the current parameters, this program takes ' +
-      'relatively long to run (3-4 minutes on a laptop)')
+      'relatively long to run (2-3 minutes on a laptop)')
 print()
 
 # Physical parameters

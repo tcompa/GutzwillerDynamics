@@ -1,6 +1,6 @@
 from __future__ import print_function
 import itertools
-import numpy
+import numpy as np
 import sys
 
 sys.path.append('..')
@@ -8,7 +8,7 @@ from lib_inhomogeneous_gutzwiller import Gutzwiller
 
 
 def test_lattice_definition_2D():
-    xy = numpy.empty(2, dtype=numpy.int32)
+    xy = np.empty(2, dtype=np.int32)
     for L in [2, 3, 10, 11]:
         G = Gutzwiller(D=2, L=L)
         for i_site in range(G.N_sites):

@@ -9,7 +9,7 @@ os.environ['NUMEXPR_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
 import sys
-import numpy
+import numpy as np
 
 # Replace the following line with the actual code path
 codedir = '../Code/'
@@ -43,6 +43,6 @@ n_iterations = G.set_mu_via_bisection(Ntarget=Ntarget, mu_min=mu_min, mu_max=mu_
 print()
 print('Final chemical potential:   mu/U = %.6f' % (G.mu / G.U))
 print('Final number of particles:  E/U =  %.6f' % G.N)
-print('Final density:              <n> =  %.6f' % numpy.mean(G.density))
+print('Final density:              <n> =  %.6f' % np.mean(G.density))
 print('Final energy:               E/U =  %.6f' % (G.E / G.U))
 print()
