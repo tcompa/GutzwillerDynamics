@@ -335,7 +335,7 @@ cdef class Gutzwiller:
     cpdef void update_energy(self):
         ''' Re-computes self.E (NOTE: This requires up-to-date self.bmean and self.density). '''
         cdef int i_site, j_site, j_nbr, n, m
-        cdef double f_n_square
+        cdef double f_n_square, sum_density_on_neighbors
         self.E = 0.0
         for i_site in range(self.N_sites):
             # Nearest-neighbor hopping
@@ -348,9 +348,10 @@ cdef class Gutzwiller:
                 self.E += 0.5 * self.U * f_n_square * n * (n - 1)
                 self.E -= self.mu_local[i_site] * f_n_square * n
             # Nearest-neighbor interaction
+            sum_density_on_neighbors = 0.0
             for j_nbr in range(self.N_nbr[i_site]):
-                j_site = self.nbr[i_site, j_nbr]
-                self.E += 0.5 * self.Vnn * self.density[i_site] * self.density[j_site]
+                sum_density_on_neighbors += self.density[self.nbr[i_site, j_nbr]]
+            self.E += 0.5 * self.Vnn * self.density[i_site] * sum_density_on_neighbors
  
     cdef void one_sequential_time_step(self, double complex dtau, int normalize_at_each_step=1, int update_variables=1):
         cdef int i_site, n, m, j_nbr
