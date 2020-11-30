@@ -3,13 +3,13 @@
 [![Build Status](https://travis-ci.org/tcompa/GutzwillerDynamics.svg?branch=master)](https://travis-ci.org/tcompa/GutzwillerDynamics)
 [![DOI](https://zenodo.org/badge/164842990.svg)](https://zenodo.org/badge/latestdoi/164842990)
 
-
-
 ## Important
-This code is not yet complete, use it at your own risk!
+This code is in principle complete and ready to use, but there might be glitches, or edge cases where it fails. Feel free to [open a github issue](https://github.com/tcompa/GutzwillerDynamics/issues/new) if you need support, or if you see any unepxected behavior of the program.
 
 ## What is this?
 This program implements the Gutzwiller variational wave function for the [Bose-Hubbard model](https://en.wikipedia.org/wiki/Bose%E2%80%93Hubbard_model). The Gutzwiller coefficients are site-dependent (so that, for instance, one can add an additional confining potential) and complex-valued (so that this code can be used both for imaginary- and real-time evolution).
+Note: time-evolution is implemented with a sequential updates over all sites, as suggested in [this work](http://dx.doi.org/10.1103/PhysRevA.76.051603) - see discussion below Eq. (2).
+
 
 ## How to use it?
 This is a python code, which requires the [numpy](http://www.numpy.org/), [scipy](https://www.scipy.org/scipylib/download.html) and
